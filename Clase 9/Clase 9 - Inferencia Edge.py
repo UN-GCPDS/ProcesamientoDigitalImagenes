@@ -1,10 +1,10 @@
 import cv2
 import numpy as np
-import tensorflow
+import ai_edge_litert.interpreter import Interpreter
 import time
 
 # Cargar el modelo TFLite
-interpreter = tensorflow.lite.Interpreter(model_path="mobilenetv3.tflite")
+interpreter = Interpreter(model_path="mobilenetv3.tflite")
 interpreter.allocate_tensors()
 
 # Obtener detalles de entrada y salida
