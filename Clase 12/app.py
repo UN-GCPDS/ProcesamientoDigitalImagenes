@@ -182,11 +182,7 @@ def predict_detection(image: Image.Image) -> Image.Image:
         scores = predictions["scores"]
         labels = predictions["labels"]
         
-        h_orig, w_orig = image.height, image.width
-        boxes_scaled = boxes.clone()
-        boxes_scaled[:, [0, 2]] = (boxes[:, [0, 2]] / w_orig) * 320
-        boxes_scaled[:, [1, 3]] = (boxes[:, [1, 3]] / h_orig) * 320
-        boxes_formatted = boxes_scaled[:, [1, 0, 3, 2]]
+        boxes_formatted = boxes[:, [1, 0, 3, 2]]
         return postprocesar_deteccion(boxes_formatted.unsqueeze(0), scores.unsqueeze(0), labels.unsqueeze(0), image)
 
 # Definición de la interfaz de Gradio
