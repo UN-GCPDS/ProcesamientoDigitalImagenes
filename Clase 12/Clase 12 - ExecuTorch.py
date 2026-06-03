@@ -7,34 +7,46 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#       jupytext_version: 1.19.1
 # ---
 
 # %% [markdown]
+# <img src="https://www.funcionpublica.gov.co/documents/d/guest/logo-universidad-nacional" alt="Logo UNAL" width="600"/>
+#
+# ### **Universidad Nacional de Colombia sede Manizales**
+# #### Facultad de ingeniería y arquitectura
+# #### Departamento de ingeniería eléctrica, electrónica y computación
+# #### *Procesamiento Digital de Imágenes*
+#
+# #### Profesor: Lucas Iturriago
+# #### Monitora: Isabella Valero Mora - lvalerom@unal.edu.co
+
+# %% [markdown]
 # # 1. Cuantización a Float16 y el Ecosistema de ExecuTorch
-# 
+#
 # En el procesamiento digital de imágenes y visión por computador en dispositivos de borde (edge), la optimización del tamaño del modelo y la velocidad de inferencia son de vital importancia. ExecuTorch es la plataforma insignia de PyTorch para ejecutar modelos directamente en teléfonos móviles, dispositivos IoT y hardware especializado de forma altamente eficiente.
-# 
+#
 # Uno de los métodos fundamentales de compresión es la conversión o **cuantización a precisión float16 (media precisión)**. Mientras que la precisión estándar de entrenamiento es float32 (precisión simple), reducirla a float16 reduce el tamaño de almacenamiento del modelo a la mitad y duplica el rendimiento del ancho de banda de memoria.
-# 
+#
 # ## 1.1. Representación Matemática de Float16 (IEEE 754)
-# 
+#
 # Un número flotante de media precisión (float16) consta de 16 bits en total, distribuidos de la siguiente manera:
 # *   **1 bit de signo ($S$)**
 # *   **5 bits de exponente ($E$)** con un sesgo (bias) de $15$
 # *   **10 bits de mantisa o fracción ($M$)**
-# 
+#
 # La ecuación matemática que define su valor real está dada por:
-# 
+#
 # $$V = (-1)^S \times 2^{E - 15} \times \left(1 + \sum_{i=1}^{10} b_i 2^{-i}\right)$$
-# 
+#
 # Donde $b_i \in \{0, 1\}$ son los coeficientes binarios de la mantisa. En comparación, un número de precisión simple (float32) utiliza 32 bits (1 de signo, 8 de exponente con sesgo de 127, y 23 de mantisa):
-# 
+#
 # $$V = (-1)^S \times 2^{E - 127} \times \left(1 + \sum_{i=1}^{23} b_i 2^{-i}\right)$$
-# 
+#
 # Al limitar la mantisa y el rango del exponente, podemos representar valores en un intervalo de aproximadamente $\pm 65504$ con una precisión de hasta $0.000977$. Esto es más que suficiente para la mayoría de arquitecturas de visión profunda en fase de inferencia.
-# 
+#
 # ## 1.2. Ciclo de Vida de Exportación de ExecuTorch
-# 
+#
 # El pipeline completo de exportación consta de los siguientes pasos:
 # 1.  **Captura del Grafo (torch.export):** Se rastrea el flujo de ejecución de PyTorch y se genera un grafo en el dialecto de operadores de ATen (`ExportedProgram`).
 # 2.  **Conversión a Edge (EXIR Edge Dialect):** Se transforma el grafo a un conjunto simplificado de operadores optimizados para dispositivos móviles.
@@ -42,6 +54,9 @@
 # 4.  **Serialización (.pte):** Se guarda el grafo resultante como un archivo Flatbuffer con extensión `.pte` listo para su ejecución.
 
 # %%
+# !pip install executorch -q
+# !pip install torch==2.11.0 -q
+
 import torch
 import torchvision.models as models
 from torch.export import export
@@ -50,7 +65,7 @@ from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPar
 
 # %% [markdown]
 # ## 1.3. Configuración de Parámetros Globales de Entrada
-# 
+#
 # Definimos las dimensiones y tipos de datos requeridos para compilar cada uno de los modelos de nuestra sesión.
 # En este caso, todas nuestras entradas y pesos serán forzados a precisión `torch.float16`.
 
@@ -62,11 +77,11 @@ DETECTION_INPUT_SIZE = (1, 3, 320, 320)
 
 # %% [markdown]
 # # 2. Exportación del Modelo de Clasificación (MobileNetV2)
-# 
+#
 # MobileNetV2 es una arquitectura liviana y eficiente que utiliza convoluciones separables en profundidad.
-# 
+#
 # $$y = \text{MobileNetV2}(x), \quad x \in \mathbb{R}^{1 \times 3 \times 224 \times 224}$$
-# 
+#
 # Para exportar en float16, primero cargamos el modelo preentrenado, lo pasamos a modo evaluación, lo casteamos a float16 usando `.half()`, y creamos tensores de entrada de prueba con el mismo tipo de precisión.
 
 # %%
@@ -99,13 +114,13 @@ print("Clasificación: Modelo guardado con éxito como 'mobilenet_v2_fp16.pte'")
 
 # %% [markdown]
 # # 3. Exportación del Modelo de Segmentación Semántica (DeepLabV3)
-# 
+#
 # DeepLabV3 es un modelo avanzado de segmentación de imágenes que utiliza convoluciones atrosas (con dilatación espacial) para extraer características multiescala.
-# 
+#
 # Los modelos de segmentación en TorchVision devuelven diccionarios que contienen múltiples salidas intermedias (`"out"` y `"aux"`). Sin embargo, `torch.export` requiere salidas simplificadas en forma de tensores o tuplas de tensores.
-# 
+#
 # Creamos un módulo contenedor `SegmentationWrapper` para retornar únicamente el tensor principal de predicciones de segmentación:
-# 
+#
 # $$\hat{y} = \text{DeepLabV3}(x)[\text{"out"}] \in \mathbb{R}^{1 \times C_{classes} \times H \times W}$$
 
 # %%
@@ -148,17 +163,17 @@ print("Segmentación: Modelo guardado con éxito como 'deeplabv3_fp16.pte'")
 
 # %% [markdown]
 # # 4. Exportación del Modelo de Detección de Objetos (SSDLite)
-# 
+#
 # El modelo SSDLite es una variante compacta de SSD (Single Shot MultiBox Detector) enfocada en dispositivos embebidos.
-# 
+#
 # Los modelos de detección de TorchVision son dinámicos: realizan internamente el escalamiento de imágenes y ejecutan operaciones complejas de filtrado no máximo (Non-Maximum Suppression - NMS) que varían el tamaño de salida según el número de objetos detectados.
-# 
+#
 # Para exportarlo de forma segura con `torch.export` a ExecuTorch, crearemos un Wrapper llamado `SSDLiteWrapper`. Este wrapper procesará las características y las pasará por la cabeza de predicción (`head`) de forma directa, eludiendo la lógica interna y retornando los tensores planos y crudos (raw outputs) de las cajas candidatas de regresión y las puntuaciones de las clases correspondientes.
-# 
+#
 # Las salidas del wrapper corresponden a:
 # 1.  `bbox_regression`: Delimitación espacial tentativa.
 # 2.  `cls_logits`: Distribución de probabilidad sobre las clases de los objetos.
-# 
+#
 # El post-procesamiento (NMS y decodificación) se trasladará al cliente para optimizar la eficiencia y portabilidad en el backend de inferencia.
 
 # %%

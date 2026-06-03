@@ -31,17 +31,17 @@ COPY --chown=user requirements.txt* ./
 # Instalar dependencias de Python
 # Nota: Si el archivo requirements.txt no existe, se instalarán las dependencias por defecto.
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    torch \
+    pip install --no-cache-dir --quiet \
+    executorch \
+    torch==2.11.0 \
     torchvision \
     numpy \
     opencv-python-headless \
     gradio \
-    gradio_client \
-    executorch || true
+    gradio_client
 
 # Copiar el script del servidor y los modelos (.pte) al contenedor
-COPY --chown=user clase_12_servir_space.py ./app.py
+COPY --chown=user app.py ./app.py
 COPY --chown=user *.pte ./
 
 # Exponer el puerto por defecto que usa Hugging Face Spaces (7860)

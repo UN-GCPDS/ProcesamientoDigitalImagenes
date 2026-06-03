@@ -1,97 +1,3 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     formats: py:percent,ipynb
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.19.1
-# ---
-
-# %% [markdown]
-# # 1. Servir Modelos de ExecuTorch en Hugging Face Spaces (Gradio)
-#
-# Una vez que los modelos han sido exportados al formato optimizado de ExecuTorch (`.pte`), el siguiente paso es desplegarlos en producción para que puedan ser consumidos por aplicaciones externas. Hugging Face Spaces proporciona un entorno ideal para hospedar aplicaciones web interactivas de aprendizaje automático utilizando la librería **Gradio**.
-#
-# ## 1.1. Arquitectura de Despliegue en Hugging Face
-#
-# En este laboratorio, construiremos un servidor Gradio multimodelo que puede procesar tareas de:
-# 1.  **Clasificación de imágenes**
-# 2.  **Segmentación semántica**
-# 3.  **Detección de objetos**
-#
-# Debido a que ExecuTorch requiere librerías nativas compiladas de C++ que pueden variar entre sistemas operativos, implementaremos un cargador robusto con un **mecanismo de fallback (contingencia)**. Si el entorno no dispone del runtime nativo de ExecuTorch (`executorch.runtime`), la aplicación cargará automáticamente los modelos base de PyTorch en FP32/FP16 para garantizar que la interfaz de usuario siga funcionando correctamente.
-#
-# ## 1.2. Fórmulas de Normalización y Procesamiento de Imágenes
-#
-# Los modelos de visión preentrenados en ImageNet esperan que la imagen de entrada de $8\text{-bits}$ en el rango $[0, 255]$ se convierta a un tensor flotante en el rango $[0, 1]$, y luego se normalice usando la media ($\mu$) y desviación estándar ($\sigma$) del conjunto de datos original:
-#
-# $$\mu = [0.485, 0.456, 0.406], \quad \sigma = [0.229, 0.224, 0.225]$$
-#
-# La operación de normalización para cada canal de color está dada por:
-#
-# $$I_{\text{norm}}(c, x, y) = \frac{\frac{I(c, x, y)}{255.0} - \mu_c}{\sigma_c}$$
-#
-# Donde $I(c,x,y)$ es el valor del píxel en el canal $c$ en las coordenadas espaciales $(x,y)$.
-
-# %%
-import os
-import sys
-import shutil
-import base64
-import requests
-from PIL import Image
-from huggingface_hub import notebook_login
-
-# %% [markdown]
-# # 2. Creación y Configuración del Repositorio de Hugging Face
-#
-# Para automatizar la subida y configuración del Space, primero debemos autenticarnos con Hugging Face. Esto abrirá una interfaz interactiva donde ingresarás tu **User Access Token** (con permisos de *write*).
-
-# %%
-# 1. Iniciar sesión en Hugging Face
-notebook_login()
-
-# %% [markdown]
-# ## 2.1. Configuración de Variables del Servidor
-#
-# Define tu nombre de usuario de Hugging Face y el nombre que deseas darle a tu nuevo Space.
-
-# %%
-HF_USER = "tu_usuario_hf"
-SPACE_NAME = "executorch-vision-fp16"
-REPO_URL = f"https://huggingface.co/spaces/{HF_USER}/{SPACE_NAME}"
-
-print(f"URL de clonación del Space: {REPO_URL}")
-
-# %% [markdown]
-# ## 2.2. Clonación y Configuración de Git LFS
-#
-# Clonamos el repositorio del Space. Dado que subiremos archivos de modelos pesados (`.pte`), debemos configurar Git LFS (Large File Storage) para evitar rechazos en el comando `git push`.
-
-# %%
-# 1. Clonar el repositorio del space creado
-# !git clone {REPO_URL}
-
-# %%
-# 2. Configurar Git LFS para que gestione los modelos binarios .pte
-# %cd {SPACE_NAME}
-# !git lfs track "*.pte"
-# !git add .gitattributes
-# %cd ..
-
-# %% [markdown]
-# # 3. Generación de los Archivos de Despliegue (Gradio & Docker)
-#
-# Escribiremos dinámicamente los tres archivos esenciales dentro del directorio de nuestro Space:
-# 1.  `app.py`: El código de la aplicación de inferencia Gradio.
-# 2.  `Dockerfile`: La definición de dependencias del contenedor de Docker.
-# 3.  `README.md`: Los metadatos de configuración que Hugging Face requiere para entender el SDK y compilar el contenedor.
-
-# %%
-# %%writefile {SPACE_NAME}/app.py
 import os
 import sys
 import numpy as np
@@ -101,6 +7,7 @@ import torchvision.models as models
 import gradio as gr
 from PIL import Image
 
+# Intentar importar el runtime de ExecuTorch
 try:
     from executorch.runtime import Runtime, Program
     EXECUTORCH_AVAILABLE = True
@@ -109,13 +16,23 @@ except ImportError:
     EXECUTORCH_AVAILABLE = False
     print("[WARNING] ExecuTorch no está disponible. Usando fallback de PyTorch.")
 
+# Rutas de los archivos del modelo ExecuTorch (.pte)
 PATH_MODEL_CLS = "mobilenet_v2_fp16.pte"
 PATH_MODEL_SEG = "deeplabv3_fp16.pte"
 PATH_MODEL_DET = "ssdlite_fp16.pte"
 
+# Media y desviación estándar para normalización ImageNet
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
+# Clases de PASCAL VOC (20 clases + background) para Segmentación
+PASCAL_CLASSES = [
+    'background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus',
+    'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
+    'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+]
+
+# Clases de COCO para Detección de Objetos
 COCO_CLASSES = [
     '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
     'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
@@ -131,10 +48,14 @@ COCO_CLASSES = [
     'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
+# Generar colores aleatorios fijos para las clases de segmentación y detección
 np.random.seed(42)
 COLOR_PALETTE = np.random.randint(0, 255, size=(100, 3), dtype=np.uint8)
 
 def preprocesar_imagen(img_pil: Image.Image, size: tuple) -> torch.Tensor:
+    """
+    Aplica resize, normalización y transposición a la imagen.
+    """
     img_resized = img_pil.resize(size)
     img_np = np.array(img_resized, dtype=np.float32) / 255.0
     img_normalized = (img_np - IMAGENET_MEAN) / IMAGENET_STD
@@ -143,6 +64,9 @@ def preprocesar_imagen(img_pil: Image.Image, size: tuple) -> torch.Tensor:
     return tensor
 
 def postprocesar_segmentacion(output_tensor: torch.Tensor, original_img: Image.Image) -> Image.Image:
+    """
+    Convierte el mapa de probabilidades en una máscara de color mezclada con la imagen original.
+    """
     mask = torch.argmax(output_tensor[0], dim=0).numpy().astype(np.uint8)
     w, h = original_img.size
     mask_resized = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
@@ -152,6 +76,9 @@ def postprocesar_segmentacion(output_tensor: torch.Tensor, original_img: Image.I
     return Image.fromarray(blended)
 
 def postprocesar_deteccion(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor, original_img: Image.Image, threshold: float = 0.5) -> Image.Image:
+    """
+    Dibuja cajas delimitadoras y etiquetas sobre la imagen de entrada.
+    """
     img_np = np.array(original_img)
     h, w, _ = img_np.shape
     
@@ -200,10 +127,12 @@ class ModelRunner:
             with torch.no_grad():
                 return self.model(input_tensor)
 
+# Instanciamos los tres modelos
 runner_cls = ModelRunner(PATH_MODEL_CLS, lambda: models.mobilenet_v2(pretrained=True))
 runner_seg = ModelRunner(PATH_MODEL_SEG, lambda: models.segmentation.deeplabv3_mobilenet_v3_large(pretrained=True))
 runner_det = ModelRunner(PATH_MODEL_DET, lambda: models.detection.ssdlite320_mobilenet_v3_large(pretrained=True))
 
+# Carga de etiquetas de ImageNet para Clasificación
 import urllib.request
 try:
     url = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
@@ -228,6 +157,7 @@ def predict_segmentation(image: Image.Image) -> Image.Image:
         return None
     tensor = preprocesar_imagen(image, (256, 256))
     output = runner_seg.run(tensor)
+    
     if isinstance(output, dict):
         output_tensor = output["out"]
     else:
@@ -242,15 +172,17 @@ def predict_detection(image: Image.Image) -> Image.Image:
     
     if runner_det.use_executorch:
         bbox_regression, cls_logits = output
+        h, w = image.size
         mock_boxes = np.array([[[100, 100, 200, 200]]], dtype=np.float32)
         mock_scores = np.array([[0.95]], dtype=np.float32)
-        mock_labels = np.array([[1]], dtype=np.int64)
+        mock_labels = np.array([[1]], dtype=np.int64) # Persona
         return postprocesar_deteccion(mock_boxes, mock_scores, mock_labels, image)
     else:
         predictions = output[0]
         boxes = predictions["boxes"]
         scores = predictions["scores"]
         labels = predictions["labels"]
+        
         h_orig, w_orig = image.height, image.width
         boxes_scaled = boxes.clone()
         boxes_scaled[:, [0, 2]] = (boxes[:, [0, 2]] / w_orig) * 320
@@ -258,150 +190,37 @@ def predict_detection(image: Image.Image) -> Image.Image:
         boxes_formatted = boxes_scaled[:, [1, 0, 3, 2]]
         return postprocesar_deteccion(boxes_formatted.unsqueeze(0), scores.unsqueeze(0), labels.unsqueeze(0), image)
 
+# Definición de la interfaz de Gradio
 with gr.Blocks(title="Servidor de Inferencia ExecuTorch FP16") as demo:
     gr.Markdown("# Servidor de Visión Artificial: ExecuTorch (Float16)")
-    gr.Markdown("Inferencia multimodelo optimizada con ExecuTorch y desplegada con Docker en Hugging Face Spaces.")
+    gr.Markdown(
+        "Esta interfaz interactiva permite ejecutar modelos de visión por computador optimizados con ExecuTorch y cuantizados a float16. "
+        "Usa el menú de pestañas para probar clasificación, segmentación semántica o detección de objetos."
+    )
     
     with gr.Tab("Clasificación de Imágenes"):
+        gr.Markdown("### Identificación de Categorías (MobileNetV2)")
         with gr.Row():
-            img_in = gr.Image(type="pil")
-            label_out = gr.Label(num_top_classes=5)
+            img_in = gr.Image(type="pil", label="Imagen de Entrada")
+            label_out = gr.Label(num_top_classes=5, label="Predicción (Clase e Histograma)")
         btn_run = gr.Button("Clasificar")
         btn_run.click(predict_classification, inputs=img_in, outputs=label_out)
         
     with gr.Tab("Segmentación Semántica"):
+        gr.Markdown("### Delineación de Clases a Nivel de Píxel (DeepLabV3)")
         with gr.Row():
-            img_in_seg = gr.Image(type="pil")
-            img_out_seg = gr.Image(type="pil")
+            img_in_seg = gr.Image(type="pil", label="Imagen de Entrada")
+            img_out_seg = gr.Image(type="pil", label="Mapa de Segmentación")
         btn_run_seg = gr.Button("Segmentar")
         btn_run_seg.click(predict_segmentation, inputs=img_in_seg, outputs=img_out_seg)
         
     with gr.Tab("Detección de Objetos"):
+        gr.Markdown("### Localización de Objetos con Cajas Delimitadoras (SSDLite)")
         with gr.Row():
-            img_in_det = gr.Image(type="pil")
-            img_out_det = gr.Image(type="pil")
+            img_in_det = gr.Image(type="pil", label="Imagen de Entrada")
+            img_out_det = gr.Image(type="pil", label="Detecciones Localizadas")
         btn_run_det = gr.Button("Detectar")
         btn_run_det.click(predict_detection, inputs=img_in_det, outputs=img_out_det)
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)
-
-# %%
-# %%writefile {SPACE_NAME}/Dockerfile
-FROM python:3.10-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libgl1 \
-    libglib2.0-0 \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
-
-WORKDIR $HOME/app
-
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --quiet \
-    executorch \
-    torch==2.11.0 \
-    torchvision \
-    numpy \
-    opencv-python-headless \
-    gradio \
-    gradio_client
-
-COPY --chown=user app.py ./app.py
-COPY --chown=user *.pte ./
-
-EXPOSE 7860
-
-CMD ["python", "app.py"]
-
-# %%
-# %%writefile {SPACE_NAME}/README.md
-# ---
-# title: Servidor de Visión ExecuTorch FP16
-# emoji: 📷
-# colorFrom: blue
-# colorTo: green
-# sdk: docker
-# pinned: false
-# ---
-# 
-# # Inferencia de Visión con ExecuTorch (Float16)
-# Despliegue interactivo de clasificación, segmentación y detección con Gradio y Docker.
-
-# %% [markdown]
-# ## 3.1. Copiado de los Modelos `.pte`
-#
-# Copiamos los archivos de los modelos exportados dentro de la carpeta del repositorio local del Space.
-
-# %%
-# Copiar modelos exportados al directorio del space
-for model_file in ["mobilenet_v2_fp16.pte", "deeplabv3_fp16.pte", "ssdlite_fp16.pte"]:
-    if os.path.exists(model_file):
-        shutil.copy(model_file, f"{SPACE_NAME}/")
-        print(f"Modelo copiado: {model_file}")
-    else:
-        print(f"[WARNING] No se encontró el modelo local '{model_file}'. Recuerda exportarlo primero.")
-
-# %% [markdown]
-# # 4. Publicación y Despliegue en el Space
-#
-# Configuramos el nombre de usuario de Git, realizamos el commit con todos los archivos agregados y enviamos los cambios para activar la compilación del contenedor Docker en Hugging Face.
-
-# %%
-# %cd {SPACE_NAME}
-# !git config --global user.email "tu_correo@unal.edu.co"
-# !git config --global user.name "tu_usuario_hf"
-# !git add .
-# !git commit -m "Despliegue inicial de modelos ExecuTorch FP16 en Hugging Face Spaces"
-# !git push
-# %cd ..
-
-# %% [markdown]
-# # 5. Pruebas de Cliente (Consumo del API del Space)
-#
-# Cuando el contenedor finalice de compilarse en Hugging Face, la API web estará expuesta. Podemos enviar solicitudes REST desde Python de dos formas.
-
-# %% [markdown]
-# ## 5.1. Método 1: Utilizando `gradio_client`
-#
-# Método recomendado para interactuar directamente con la API desde Python.
-
-# %%
-from gradio_client import Client
-
-# URL de tu Space desplegado (Público o Privado con Token)
-# client = Client(f"{HF_USER}/{SPACE_NAME}", hf_token="tu_token_opcional")
-# result = client.predict(image="ruta/a/tu/imagen.jpg", api_name="/predict_classification")
-# print("Clasificación de la imagen:", result)
-
-# %% [markdown]
-# ## 5.2. Método 2: Utilizando solicitudes HTTP estándar con `requests`
-
-# %%
-# URL de la API de inferencia del Space
-# URL_API = f"https://{HF_USER}-{SPACE_NAME}.hf.space/api/predict"
-
-# with open("ruta/a/tu/imagen.jpg", "rb") as f:
-#     img_base64 = base64.b64encode(f.read()).decode("utf-8")
-
-# payload = {
-#     "data": [f"data:image/jpeg;base64,{img_base64}"],
-#     "fn_index": 0
-# }
-
-# # Si es privado, inyectar el Header de Authorization
-# headers = {"Authorization": "Bearer tu_token_opcional"}
-# response = requests.post(URL_API, json=payload, headers=headers)
-# print("Resultado JSON:", response.json())
