@@ -295,9 +295,49 @@ shutil.copy("app.py", f"{SPACE_NAME}/app.py")
 print("app.py copiado con éxito al space.")
 
 # %%
-# 2. Copiar Dockerfile al directorio del space
-shutil.copy("Dockerfile", f"{SPACE_NAME}/Dockerfile")
-print("Dockerfile copiado con éxito al space.")
+# 2. Generar Dockerfile con el entorno de compilación de ExecuTorch
+dockerfile_content = """FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libgl1 \
+    libglib2.0-0 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
+
+WORKDIR $HOME/app
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --quiet \
+    executorch \
+    torch==2.11.0 \
+    torchvision \
+    numpy \
+    opencv-python-headless \
+    gradio \
+    gradio_client
+
+COPY --chown=user app.py ./app.py
+COPY --chown=user *.pte ./
+
+EXPOSE 7860
+
+CMD ["python", "app.py"]
+"""
+
+with open(f"{SPACE_NAME}/Dockerfile", "w", encoding="utf-8") as f:
+    f.write(dockerfile_content)
+print("Dockerfile creado con éxito en el space.")
 
 # %%
 # 3. Generar README.md con metadatos YAML correctos para Hugging Face Spaces
