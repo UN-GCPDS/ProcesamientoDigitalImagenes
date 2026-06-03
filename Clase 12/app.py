@@ -81,10 +81,9 @@ def postprocesar_deteccion(boxes: torch.Tensor, scores: torch.Tensor, labels: to
     """
     img_np = np.array(original_img)
     h, w, _ = img_np.shape
-    
-    boxes_np = boxes[0].detach().numpy() if isinstance(boxes, torch.Tensor) else boxes
-    scores_np = scores[0].detach().numpy() if isinstance(scores, torch.Tensor) else scores
-    labels_np = labels[0].detach().numpy() if isinstance(labels, torch.Tensor) else labels
+    boxes_np = boxes[0].detach().numpy() if isinstance(boxes, torch.Tensor) else boxes[0]
+    scores_np = scores[0].detach().numpy() if isinstance(scores, torch.Tensor) else scores[0]
+    labels_np = labels[0].detach().numpy() if isinstance(labels, torch.Tensor) else labels[0]
     
     for box, score, label_idx in zip(boxes_np, scores_np, labels_np):
         if score >= threshold:

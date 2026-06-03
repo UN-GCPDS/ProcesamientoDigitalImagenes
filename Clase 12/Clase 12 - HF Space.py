@@ -152,12 +152,15 @@ def postprocesar_segmentacion(output_tensor: torch.Tensor, original_img: Image.I
     return Image.fromarray(blended)
 
 def postprocesar_deteccion(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor, original_img: Image.Image, threshold: float = 0.5) -> Image.Image:
+    """
+    Dibuja cajas delimitadoras y etiquetas sobre la imagen de entrada.
+    """
     img_np = np.array(original_img)
     h, w, _ = img_np.shape
     
-    boxes_np = boxes[0].detach().numpy() if isinstance(boxes, torch.Tensor) else boxes
-    scores_np = scores[0].detach().numpy() if isinstance(scores, torch.Tensor) else scores
-    labels_np = labels[0].detach().numpy() if isinstance(labels, torch.Tensor) else labels
+    boxes_np = boxes[0].detach().numpy() if isinstance(boxes, torch.Tensor) else boxes[0]
+    scores_np = scores[0].detach().numpy() if isinstance(scores, torch.Tensor) else scores[0]
+    labels_np = labels[0].detach().numpy() if isinstance(labels, torch.Tensor) else labels[0]
     
     for box, score, label_idx in zip(boxes_np, scores_np, labels_np):
         if score >= threshold:
@@ -287,58 +290,34 @@ if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)
 
 # %%
-# %%writefile {SPACE_NAME}/Dockerfile
-FROM python:3.10-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libgl1 \
-    libglib2.0-0 \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
-
-WORKDIR $HOME/app
-
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --quiet \
-    executorch \
-    torch==2.11.0 \
-    torchvision \
-    numpy \
-    opencv-python-headless \
-    gradio \
-    gradio_client
-
-COPY --chown=user app.py ./app.py
-COPY --chown=user *.pte ./
-
-EXPOSE 7860
-
-CMD ["python", "app.py"]
+# 1. Copiar app.py al directorio del space
+shutil.copy("app.py", f"{SPACE_NAME}/app.py")
+print("app.py copiado con éxito al space.")
 
 # %%
-# %%writefile {SPACE_NAME}/README.md
-# ---
-# title: Servidor de Visión ExecuTorch FP16
-# emoji: 📷
-# colorFrom: blue
-# colorTo: green
-# sdk: docker
-# pinned: false
-# ---
-# 
-# # Inferencia de Visión con ExecuTorch (Float16)
-# Despliegue interactivo de clasificación, segmentación y detección con Gradio y Docker.
+# 2. Copiar Dockerfile al directorio del space
+shutil.copy("Dockerfile", f"{SPACE_NAME}/Dockerfile")
+print("Dockerfile copiado con éxito al space.")
+
+# %%
+# 3. Generar README.md con metadatos YAML correctos para Hugging Face Spaces
+readme_content = f"""---
+title: Servidor de Vision ExecuTorch FP16
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: app.py
+pinned: false
+---
+
+# Inferencia de Visión con ExecuTorch (Float16)
+Despliegue interactivo de clasificación, segmentación y detección con Gradio y Docker.
+"""
+
+with open(f"{SPACE_NAME}/README.md", "w", encoding="utf-8") as f:
+    f.write(readme_content)
+print("README.md creado con éxito en el space.")
 
 # %% [markdown]
 # ## 3.1. Copiado de los Modelos `.pte`
