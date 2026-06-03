@@ -11,6 +11,17 @@
 # ---
 
 # %% [markdown]
+# <img src="https://www.funcionpublica.gov.co/documents/d/guest/logo-universidad-nacional" alt="Logo UNAL" width="600"/>
+#
+# ### **Universidad Nacional de Colombia sede Manizales**
+# #### Facultad de ingeniería y arquitectura
+# #### Departamento de ingeniería eléctrica, electrónica y computación
+# #### *Procesamiento Digital de Imágenes*
+#
+# #### Profesor: Lucas Iturriago
+# #### Monitora: Isabella Valero Mora - lvalerom@unal.edu.co
+
+# %% [markdown]
 # # 1. Servir Modelos de ExecuTorch en Hugging Face Spaces (Gradio)
 #
 # Una vez que los modelos han sido exportados al formato optimizado de ExecuTorch (`.pte`), el siguiente paso es desplegarlos en producción para que puedan ser consumidos por aplicaciones externas. Hugging Face Spaces proporciona un entorno ideal para hospedar aplicaciones web interactivas de aprendizaje automático utilizando la librería **Gradio**.
@@ -51,8 +62,10 @@ from huggingface_hub import notebook_login
 # Para automatizar la subida y configuración del Space, primero debemos autenticarnos con Hugging Face. Esto abrirá una interfaz interactiva donde ingresarás tu **User Access Token** (con permisos de *write*).
 
 # %%
-# 1. Iniciar sesión en Hugging Face
-notebook_login()
+try:
+    notebook_login()
+except Exception as e:
+    print("[INFO] notebook_login no está disponible o no se ejecuta en un entorno interactivo. Continúa con la generación de archivos locales.")
 
 # %% [markdown]
 # ## 2.1. Configuración de Variables del Servidor
@@ -61,7 +74,7 @@ notebook_login()
 
 # %%
 HF_USER = "tu_usuario_hf"
-SPACE_NAME = "executorch-vision-fp16"
+SPACE_NAME = "executorch-pdi-unal"
 REPO_URL = f"https://huggingface.co/spaces/{HF_USER}/{SPACE_NAME}"
 
 print(f"URL de clonación del Space: {REPO_URL}")
@@ -91,8 +104,8 @@ print(f"URL de clonación del Space: {REPO_URL}")
 # 3.  `README.md`: Los metadatos de configuración que Hugging Face requiere para entender el SDK y compilar el contenedor.
 
 # %%
-# %%writefile {SPACE_NAME}/app.py
-import os
+# 1. Generar app.py con la aplicación Gradio en Float32
+app_content = """import os
 import sys
 import numpy as np
 import cv2
@@ -109,9 +122,9 @@ except ImportError:
     EXECUTORCH_AVAILABLE = False
     print("[WARNING] ExecuTorch no está disponible. Usando fallback de PyTorch.")
 
-PATH_MODEL_CLS = "mobilenet_v2_fp16.pte"
-PATH_MODEL_SEG = "deeplabv3_fp16.pte"
-PATH_MODEL_DET = "ssdlite_fp16.pte"
+PATH_MODEL_CLS = "mobilenet_v2.pte"
+PATH_MODEL_SEG = "deeplabv3.pte"
+PATH_MODEL_DET = "ssdlite.pte"
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -135,11 +148,13 @@ np.random.seed(42)
 COLOR_PALETTE = np.random.randint(0, 255, size=(100, 3), dtype=np.uint8)
 
 def preprocesar_imagen(img_pil: Image.Image, size: tuple) -> torch.Tensor:
+    if img_pil.mode != "RGB":
+        img_pil = img_pil.convert("RGB")
     img_resized = img_pil.resize(size)
     img_np = np.array(img_resized, dtype=np.float32) / 255.0
     img_normalized = (img_np - IMAGENET_MEAN) / IMAGENET_STD
     img_transposed = np.transpose(img_normalized, (2, 0, 1))
-    tensor = torch.from_numpy(img_transposed).unsqueeze(0)
+    tensor = torch.from_numpy(img_transposed).unsqueeze(0).contiguous()
     return tensor
 
 def postprocesar_segmentacion(output_tensor: torch.Tensor, original_img: Image.Image) -> Image.Image:
@@ -152,9 +167,6 @@ def postprocesar_segmentacion(output_tensor: torch.Tensor, original_img: Image.I
     return Image.fromarray(blended)
 
 def postprocesar_deteccion(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor, original_img: Image.Image, threshold: float = 0.5) -> Image.Image:
-    """
-    Dibuja cajas delimitadoras y etiquetas sobre la imagen de entrada.
-    """
     img_np = np.array(original_img)
     h, w, _ = img_np.shape
     
@@ -194,10 +206,9 @@ class ModelRunner:
 
     def run(self, input_tensor: torch.Tensor):
         if self.use_executorch:
-            input_half = input_tensor.half()
-            outputs = self.method.execute((input_half,))
+            outputs = self.method.execute((input_tensor,))
             if isinstance(outputs, list) and len(outputs) == 1:
-                return outputs[0].float()
+                return outputs[0]
             return outputs
         else:
             with torch.no_grad():
@@ -257,8 +268,8 @@ def predict_detection(image: Image.Image) -> Image.Image:
         boxes_formatted = boxes[:, [1, 0, 3, 2]]
         return postprocesar_deteccion(boxes_formatted.unsqueeze(0), scores.unsqueeze(0), labels.unsqueeze(0), image)
 
-with gr.Blocks(title="Servidor de Inferencia ExecuTorch FP16") as demo:
-    gr.Markdown("# Servidor de Visión Artificial: ExecuTorch (Float16)")
+with gr.Blocks(title="Servidor de Inferencia ExecuTorch FP32") as demo:
+    gr.Markdown("# Servidor de Visión Artificial: ExecuTorch (Float32)")
     gr.Markdown("Inferencia multimodelo optimizada con ExecuTorch y desplegada con Docker en Hugging Face Spaces.")
     
     with gr.Tab("Clasificación de Imágenes"):
@@ -284,11 +295,12 @@ with gr.Blocks(title="Servidor de Inferencia ExecuTorch FP16") as demo:
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)
+"""
 
-# %%
-# 1. Copiar app.py al directorio del space
-shutil.copy("app.py", f"{SPACE_NAME}/app.py")
-print("app.py copiado con éxito al space.")
+os.makedirs(SPACE_NAME, exist_ok=True)
+with open(f"{SPACE_NAME}/app.py", "w", encoding="utf-8") as f:
+    f.write(app_content)
+print("app.py creado con éxito en el space.")
 
 # %%
 # 2. Generar Dockerfile con el entorno de compilación de ExecuTorch
@@ -338,7 +350,7 @@ print("Dockerfile creado con éxito en el space.")
 # %%
 # 3. Generar README.md con metadatos YAML correctos para Hugging Face Spaces
 readme_content = f"""---
-title: Servidor de Vision ExecuTorch FP16
+title: {SPACE_NAME}
 emoji: 🚀
 colorFrom: blue
 colorTo: green
@@ -347,7 +359,7 @@ app_file: app.py
 pinned: false
 ---
 
-# Inferencia de Visión con ExecuTorch (Float16)
+# Inferencia de Visión con ExecuTorch (Float32)
 Despliegue interactivo de clasificación, segmentación y detección con Gradio y Docker.
 """
 
@@ -362,7 +374,7 @@ print("README.md creado con éxito en el space.")
 
 # %%
 # Copiar modelos exportados al directorio del space
-for model_file in ["mobilenet_v2_fp16.pte", "deeplabv3_fp16.pte", "ssdlite_fp16.pte"]:
+for model_file in ["mobilenet_v2.pte", "deeplabv3.pte", "ssdlite.pte"]:
     if os.path.exists(model_file):
         shutil.copy(model_file, f"{SPACE_NAME}/")
         print(f"Modelo copiado: {model_file}")
@@ -379,44 +391,27 @@ for model_file in ["mobilenet_v2_fp16.pte", "deeplabv3_fp16.pte", "ssdlite_fp16.
 # !git config --global user.email "tu_correo@unal.edu.co"
 # !git config --global user.name "tu_usuario_hf"
 # !git add .
-# !git commit -m "Despliegue inicial de modelos ExecuTorch FP16 en Hugging Face Spaces"
+# !git commit -m "Despliegue inicial de modelos ExecuTorch FP32 en Hugging Face Spaces"
 # !git push
 # %cd ..
 
 # %% [markdown]
 # # 5. Pruebas de Cliente (Consumo del API del Space)
 #
-# Cuando el contenedor finalice de compilarse en Hugging Face, la API web estará expuesta. Podemos enviar solicitudes REST desde Python de dos formas.
+# Cuando el contenedor finalice de compilarse en Hugging Face, la API web estará expuesta. Podemos enviar solicitudes REST desde Python.
 
 # %% [markdown]
-# ## 5.1. Método 1: Utilizando `gradio_client`
+# ## 5.1. `gradio_client`
 #
 # Método recomendado para interactuar directamente con la API desde Python.
 
 # %%
-from gradio_client import Client
+try:
+    from gradio_client import Client
+except ImportError:
+    print("[INFO] gradio_client no está instalado localmente. Omitiendo prueba de cliente de Gradio.")
 
 # URL de tu Space desplegado (Público o Privado con Token)
 # client = Client(f"{HF_USER}/{SPACE_NAME}", hf_token="tu_token_opcional")
 # result = client.predict(image="ruta/a/tu/imagen.jpg", api_name="/predict_classification")
 # print("Clasificación de la imagen:", result)
-
-# %% [markdown]
-# ## 5.2. Método 2: Utilizando solicitudes HTTP estándar con `requests`
-
-# %%
-# URL de la API de inferencia del Space
-# URL_API = f"https://{HF_USER}-{SPACE_NAME}.hf.space/api/predict"
-
-# with open("ruta/a/tu/imagen.jpg", "rb") as f:
-#     img_base64 = base64.b64encode(f.read()).decode("utf-8")
-
-# payload = {
-#     "data": [f"data:image/jpeg;base64,{img_base64}"],
-#     "fn_index": 0
-# }
-
-# # Si es privado, inyectar el Header de Authorization
-# headers = {"Authorization": "Bearer tu_token_opcional"}
-# response = requests.post(URL_API, json=payload, headers=headers)
-# print("Resultado JSON:", response.json())
