@@ -35,17 +35,6 @@
 #
 # Debido a que ExecuTorch requiere librerías nativas compiladas de C++ que pueden variar entre sistemas operativos, implementaremos un cargador robusto con un **mecanismo de fallback (contingencia)**. Si el entorno no dispone del runtime nativo de ExecuTorch (`executorch.runtime`), la aplicación cargará automáticamente los modelos base de PyTorch en FP32/FP16 para garantizar que la interfaz de usuario siga funcionando correctamente.
 #
-# ## 1.2. Fórmulas de Normalización y Procesamiento de Imágenes
-#
-# Los modelos de visión preentrenados en ImageNet esperan que la imagen de entrada de $8\text{-bits}$ en el rango $[0, 255]$ se convierta a un tensor flotante en el rango $[0, 1]$, y luego se normalice usando la media ($\mu$) y desviación estándar ($\sigma$) del conjunto de datos original:
-#
-# $$\mu = [0.485, 0.456, 0.406], \quad \sigma = [0.229, 0.224, 0.225]$$
-#
-# La operación de normalización para cada canal de color está dada por:
-#
-# $$I_{\text{norm}}(c, x, y) = \frac{\frac{I(c, x, y)}{255.0} - \mu_c}{\sigma_c}$$
-#
-# Donde $I(c,x,y)$ es el valor del píxel en el canal $c$ en las coordenadas espaciales $(x,y)$.
 
 # %%
 import os
@@ -122,38 +111,45 @@ except ImportError:
     EXECUTORCH_AVAILABLE = False
     print("[WARNING] ExecuTorch no está disponible. Usando fallback de PyTorch.")
 
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    YOLO_AVAILABLE = False
+    print("[WARNING] Ultralytics no está disponible.")
+
 PATH_MODEL_CLS = "mobilenet_v2.pte"
 PATH_MODEL_SEG = "deeplabv3.pte"
-PATH_MODEL_DET = "ssdlite.pte"
+PATH_MODEL_DET = "yolo26.pte"
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 COCO_CLASSES = [
-    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
-    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A',
-    'N/A', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
+    'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat',
+    'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
+    'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
     'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
-    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard',
-    'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A',
-    'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+    'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+    'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake',
+    'chair', 'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
+    'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+    'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
+    'toothbrush'
 ]
 
 np.random.seed(42)
 COLOR_PALETTE = np.random.randint(0, 255, size=(100, 3), dtype=np.uint8)
 
-def preprocesar_imagen(img_pil: Image.Image, size: tuple) -> torch.Tensor:
+def preprocesar_imagen(img_pil: Image.Image, size: tuple, normalizar: bool = True) -> torch.Tensor:
     if img_pil.mode != "RGB":
         img_pil = img_pil.convert("RGB")
     img_resized = img_pil.resize(size)
     img_np = np.array(img_resized, dtype=np.float32) / 255.0
-    img_normalized = (img_np - IMAGENET_MEAN) / IMAGENET_STD
-    img_transposed = np.transpose(img_normalized, (2, 0, 1))
+    if normalizar:
+        img_np = (img_np - IMAGENET_MEAN) / IMAGENET_STD
+    img_transposed = np.transpose(img_np, (2, 0, 1))
     tensor = torch.from_numpy(img_transposed).unsqueeze(0).contiguous()
     return tensor
 
@@ -166,24 +162,24 @@ def postprocesar_segmentacion(output_tensor: torch.Tensor, original_img: Image.I
     blended = cv2.addWeighted(img_orig_np, 0.6, mask_color, 0.4, 0)
     return Image.fromarray(blended)
 
-def postprocesar_deteccion(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor, original_img: Image.Image, threshold: float = 0.5) -> Image.Image:
+def postprocesar_deteccion(boxes, scores, labels, original_img: Image.Image, threshold: float = 0.25) -> Image.Image:
     img_np = np.array(original_img)
     h, w, _ = img_np.shape
     
-    boxes_np = boxes[0].detach().numpy() if isinstance(boxes, torch.Tensor) else boxes[0]
-    scores_np = scores[0].detach().numpy() if isinstance(scores, torch.Tensor) else scores[0]
-    labels_np = labels[0].detach().numpy() if isinstance(labels, torch.Tensor) else labels[0]
+    boxes_np = boxes.detach().numpy() if isinstance(boxes, torch.Tensor) else np.array(boxes)
+    scores_np = scores.detach().numpy() if isinstance(scores, torch.Tensor) else np.array(scores)
+    labels_np = labels.detach().numpy() if isinstance(labels, torch.Tensor) else np.array(labels)
     
     for box, score, label_idx in zip(boxes_np, scores_np, labels_np):
         if score >= threshold:
-            ymin, xmin, ymax, xmax = int(box[0] * h / 320), int(box[1] * w / 320), int(box[2] * h / 320), int(box[3] * w / 320)
+            xmin, ymin, xmax, ymax = int(box[0]), int(box[1]), int(box[2]), int(box[3])
             
             xmin = max(0, min(xmin, w - 1))
             ymin = max(0, min(ymin, h - 1))
             xmax = max(0, min(xmax, w - 1))
             ymax = max(0, min(ymax, h - 1))
             
-            label_text = f"{COCO_CLASSES[int(label_idx)]}: {score:.2f}"
+            label_text = f"{COCO_CLASSES[int(label_idx) % len(COCO_CLASSES)]}: {score:.2f}"
             color = [int(c) for c in COLOR_PALETTE[int(label_idx) % len(COLOR_PALETTE)]]
             
             cv2.rectangle(img_np, (xmin, ymin), (xmax, ymax), color, 3)
@@ -197,12 +193,31 @@ class ModelRunner:
         
         if self.use_executorch:
             print(f"[INFO] Cargando modelo ExecuTorch: {pte_path}")
-            self.runtime = Runtime.get()
-            self.program = self.runtime.load_program(pte_path)
-            self.method = self.program.load_method("forward")
-        else:
+            try:
+                self.runtime = Runtime.get()
+                self.program = self.runtime.load_program(pte_path)
+                self.method = self.program.load_method("forward")
+            except Exception as e:
+                print(f"[ERROR] Error al cargar modelo ExecuTorch {pte_path}: {e}. Usando fallback.")
+                self.use_executorch = False
+                
+        if not self.use_executorch:
             print(f"[INFO] Cargando fallback de PyTorch para: {pte_path}")
-            self.model = fallback_model_fn().eval()
+            try:
+                self.model = fallback_model_fn()
+                if hasattr(self.model, "eval"):
+                    try:
+                        self.model = self.model.eval()
+                    except Exception:
+                        pass
+                if hasattr(self.model, "model") and hasattr(self.model.model, "eval"):
+                    try:
+                        self.model.model.eval()
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"[ERROR] Error al cargar fallback: {e}")
+                self.model = None
 
     def run(self, input_tensor: torch.Tensor):
         if self.use_executorch:
@@ -216,7 +231,7 @@ class ModelRunner:
 
 runner_cls = ModelRunner(PATH_MODEL_CLS, lambda: models.mobilenet_v2(pretrained=True))
 runner_seg = ModelRunner(PATH_MODEL_SEG, lambda: models.segmentation.deeplabv3_mobilenet_v3_large(pretrained=True))
-runner_det = ModelRunner(PATH_MODEL_DET, lambda: models.detection.ssdlite320_mobilenet_v3_large(pretrained=True))
+runner_det = ModelRunner(PATH_MODEL_DET, lambda: YOLO("yolo26n.pt") if YOLO_AVAILABLE else None)
 
 import urllib.request
 try:
@@ -228,45 +243,100 @@ except Exception:
 def predict_classification(image: Image.Image) -> dict:
     if image is None:
         return {}
-    tensor = preprocesar_imagen(image, (224, 224))
-    output = runner_cls.run(tensor)
-    if isinstance(output, list):
-        output = output[0]
-        
-    probabilities = torch.nn.functional.softmax(output[0], dim=0)
-    top_prob, top_catid = torch.topk(probabilities, 5)
-    return {imagenet_classes[int(idx)]: float(prob) for prob, idx in zip(top_prob, top_catid)}
+    try:
+        if not (runner_cls.use_executorch or (hasattr(runner_cls, "model") and runner_cls.model is not None)):
+            return {"Error": 1.0, "Modelo de clasificacion no cargado": 0.0}
+        tensor = preprocesar_imagen(image, (224, 224))
+        output = runner_cls.run(tensor)
+        if isinstance(output, list):
+            output = output[0]
+        if isinstance(output, np.ndarray):
+            output = torch.from_numpy(output)
+            
+        probabilities = torch.nn.functional.softmax(output[0], dim=0)
+        top_prob, top_catid = torch.topk(probabilities, 5)
+        return {imagenet_classes[int(idx)]: float(prob) for prob, idx in zip(top_prob, top_catid)}
+    except Exception as e:
+        return {"Error": 1.0, str(e): 0.0}
 
 def predict_segmentation(image: Image.Image) -> Image.Image:
     if image is None:
         return None
-    tensor = preprocesar_imagen(image, (256, 256))
-    output = runner_seg.run(tensor)
-    if isinstance(output, dict):
-        output_tensor = output["out"]
-    else:
-        output_tensor = output
-    return postprocesar_segmentacion(output_tensor, image)
+    try:
+        if not (runner_seg.use_executorch or (hasattr(runner_seg, "model") and runner_seg.model is not None)):
+            img_np = np.array(image)
+            cv2.putText(img_np, "Modelo de segmentacion no cargado", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            return Image.fromarray(img_np)
+        tensor = preprocesar_imagen(image, (256, 256))
+        output = runner_seg.run(tensor)
+        if isinstance(output, dict):
+            output_tensor = output["out"]
+        else:
+            output_tensor = output
+        if isinstance(output_tensor, np.ndarray):
+            output_tensor = torch.from_numpy(output_tensor)
+        return postprocesar_segmentacion(output_tensor, image)
+    except Exception as e:
+        img_np = np.array(image)
+        cv2.putText(img_np, f"Error: {str(e)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        return Image.fromarray(img_np)
 
 def predict_detection(image: Image.Image) -> Image.Image:
     if image is None:
         return None
-    tensor = preprocesar_imagen(image, (320, 320))
-    output = runner_det.run(tensor)
-    
-    if runner_det.use_executorch:
-        bbox_regression, cls_logits = output
-        mock_boxes = np.array([[[100, 100, 200, 200]]], dtype=np.float32)
-        mock_scores = np.array([[0.95]], dtype=np.float32)
-        mock_labels = np.array([[1]], dtype=np.int64)
-        return postprocesar_deteccion(mock_boxes, mock_scores, mock_labels, image)
-    else:
-        predictions = output[0]
-        boxes = predictions["boxes"]
-        scores = predictions["scores"]
-        labels = predictions["labels"]
-        boxes_formatted = boxes[:, [1, 0, 3, 2]]
-        return postprocesar_deteccion(boxes_formatted.unsqueeze(0), scores.unsqueeze(0), labels.unsqueeze(0), image)
+    try:
+        if not (runner_det.use_executorch or (hasattr(runner_det, "model") and runner_det.model is not None)):
+            img_np = np.array(image)
+            cv2.putText(img_np, "Modelo de deteccion no cargado", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            return Image.fromarray(img_np)
+            
+        if runner_det.use_executorch:
+            tensor = preprocesar_imagen(image, (640, 640), normalizar=False)
+            output = runner_det.run(tensor)
+            pred = output[0].numpy() if isinstance(output, torch.Tensor) else output[0]
+            predictions = pred[0].T if len(pred.shape) == 3 else pred.T
+            
+            boxes = predictions[:, :4]
+            scores = predictions[:, 4:]
+            max_scores = np.max(scores, axis=1)
+            class_ids = np.argmax(scores, axis=1)
+            
+            conf_threshold = 0.25
+            keep = max_scores >= conf_threshold
+            filtered_boxes = boxes[keep]
+            filtered_scores = max_scores[keep]
+            filtered_class_ids = class_ids[keep]
+            
+            if len(filtered_boxes) > 0:
+                cx, cy, w_box, h_box = filtered_boxes[:, 0], filtered_boxes[:, 1], filtered_boxes[:, 2], filtered_boxes[:, 3]
+                orig_h, orig_w = image.size[1], image.size[0]
+                scale_x = orig_w / 640.0
+                scale_y = orig_h / 640.0
+                
+                x1 = (cx - w_box / 2) * scale_x
+                y1 = (cy - h_box / 2) * scale_y
+                x2 = (cx + w_box / 2) * scale_x
+                y2 = (cy + h_box / 2) * scale_y
+                
+                boxes_xyxy = np.stack([x1, y1, x2, y2], axis=1)
+                boxes_xywh = np.stack([x1, y1, w_box * scale_x, h_box * scale_y], axis=1)
+                
+                indices = cv2.dnn.NMSBoxes(boxes_xywh.tolist(), filtered_scores.tolist(), conf_threshold, 0.45)
+                if len(indices) > 0:
+                    indices = np.array(indices).flatten()
+                    return postprocesar_deteccion(boxes_xyxy[indices], filtered_scores[indices], filtered_class_ids[indices], image, threshold=conf_threshold)
+            return image
+        else:
+            results = runner_det.model(image, verbose=False)
+            r = results[0]
+            boxes = r.boxes.xyxy.cpu().numpy()
+            scores = r.boxes.conf.cpu().numpy()
+            labels = r.boxes.cls.cpu().numpy()
+            return postprocesar_deteccion(boxes, scores, labels, image, threshold=0.25)
+    except Exception as e:
+        img_np = np.array(image)
+        cv2.putText(img_np, f"Error: {str(e)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        return Image.fromarray(img_np)
 
 with gr.Blocks(title="Servidor de Inferencia ExecuTorch FP32") as demo:
     gr.Markdown("# Servidor de Visión Artificial: ExecuTorch (Float32)")
@@ -294,7 +364,7 @@ with gr.Blocks(title="Servidor de Inferencia ExecuTorch FP32") as demo:
         btn_run_det.click(predict_detection, inputs=img_in_det, outputs=img_out_det)
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, show_error=True)
 """
 
 os.makedirs(SPACE_NAME, exist_ok=True)
@@ -333,7 +403,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
     numpy \
     opencv-python-headless \
     gradio \
-    gradio_client
+    gradio_client \
+    ultralytics
 
 COPY --chown=user app.py ./app.py
 COPY --chown=user *.pte ./
@@ -374,7 +445,7 @@ print("README.md creado con éxito en el space.")
 
 # %%
 # Copiar modelos exportados al directorio del space
-for model_file in ["mobilenet_v2.pte", "deeplabv3.pte", "ssdlite.pte"]:
+for model_file in ["mobilenet_v2.pte", "deeplabv3.pte", "yolo26.pte"]:
     if os.path.exists(model_file):
         shutil.copy(model_file, f"{SPACE_NAME}/")
         print(f"Modelo copiado: {model_file}")

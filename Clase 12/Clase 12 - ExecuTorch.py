@@ -26,9 +26,8 @@
 #
 # En el procesamiento digital de imágenes y visión por computador en dispositivos de borde (edge), la optimización del tamaño del modelo y la velocidad de inferencia son de vital importancia. ExecuTorch es la plataforma insignia de PyTorch para ejecutar modelos directamente en teléfonos móviles, dispositivos IoT y hardware de propósito general de forma altamente eficiente.
 #
-# Inicialmente se planteó el uso de precisión reducida `float16` (media precisión). Sin embargo, debido a que el hardware de CPU de propósito general no posee unidades aritméticas nativas de punto flotante de 16 bits, el runtime se ve obligado a emular estas operaciones mediante software, lo que introduce una degradación severa en la precisión numérica y acumulación de errores por redondeo (underflow/overflow).
 #
-# Por ello, en este laboratorio exportaremos los modelos en su precisión estándar de **Float32 (precisión simple)**, la cual está altamente optimizada para CPUs modernas gracias a conjuntos de instrucciones vectoriales (como AVX o NEON) y garantiza una fidelidad del 100% en las predicciones.
+# En esta clase exportaremos los modelos en su precisión estándar de **Float32 (precisión simple)**, la cual está altamente optimizada para CPUs modernas gracias a conjuntos de instrucciones vectoriales (como AVX o NEON) y garantiza una fidelidad del 100% en las predicciones.
 #
 # ## 1.1. Ciclo de Vida de Exportación de ExecuTorch
 #
@@ -39,6 +38,9 @@
 # 4.  **Serialización (.pte):** Se guarda el grafo resultante como un archivo Flatbuffer con extensión `.pte` listo para su ejecución.
 
 # %%
+# !pip install executorch -q
+# !pip install torch==2.11.0 -q
+# !pip install ultralytics -q
 import torch
 import torchvision.models as models
 from torch.export import export
@@ -54,7 +56,7 @@ from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPar
 # Dimensiones de entrada en formato (Batch, Canales, Alto, Ancho)
 CLASSIFICATION_INPUT_SIZE = (1, 3, 224, 224)
 SEGMENTATION_INPUT_SIZE = (1, 3, 256, 256)
-DETECTION_INPUT_SIZE = (1, 3, 320, 320)
+DETECTION_INPUT_SIZE = (1, 3, 640, 640)
 
 # %% [markdown]
 # # 2. Exportación del Modelo de Clasificación (MobileNetV2)
@@ -138,57 +140,28 @@ with open("deeplabv3.pte", "wb") as f:
 print("Segmentación: Modelo guardado con éxito como 'deeplabv3.pte'")
 
 # %% [markdown]
-# # 4. Exportación del Modelo de Detección de Objetos (SSDLite)
+# # 4. Exportación del Modelo de Detección de Objetos (YOLO26)
 #
-# El modelo SSDLite es una variante compacta de SSD enfocada en dispositivos embebidos.
+# YOLO26 es una arquitectura avanzada y eficiente de Ultralytics lanzada en enero de 2026.
+# Cuenta con un diseño nativamente NMS-free que elimina la necesidad de postprocesamiento heurístico en entrenamiento.
 #
-# Para exportarlo de forma segura con `torch.export` a ExecuTorch, utilizaremos un Wrapper llamado `SSDLiteWrapper`. Este wrapper procesará las características y las pasará por la cabeza de predicción (`head`) de forma directa, eludiendo la lógica interna dinámica y retornando los tensores planos y crudos (raw outputs) de las cajas candidatas de regresión y las puntuaciones de las clases correspondientes.
-#
-# Las salidas del wrapper corresponden a:
-# 1.  `bbox_regression`: Delimitación espacial tentativa.
-# 2.  `cls_logits`: Distribución de probabilidad sobre las clases de los objetos.
+# Para exportarlo de forma segura a ExecuTorch, usaremos el método `.export` provisto directamente por la librería de Ultralytics.
 
 # %%
-print("\n--- [3] EXPORTANDO DETECCIÓN DE OBJETOS (SSDLite FP32) ---")
+print("\n--- [3] EXPORTANDO DETECCIÓN DE OBJETOS (YOLO26 FP32) ---")
 
-# 1. Definir el wrapper para extraer las predicciones brutas de la red neuronal
-class SSDLiteWrapper(torch.nn.Module):
-    def __init__(self, model):
-        super().__init__()
-        self.model = model
+from ultralytics import YOLO
+import shutil
+import os
 
-    def forward(self, x):
-        # Extraer características usando la red troncal (backbone)
-        features = self.model.backbone(x)
-        features = list(features.values())
-        
-        # Calcular los scores y offsets de regresión de cajas de anclas a través de la cabeza (head)
-        head_outputs = self.model.head(features)
-        
-        # Retornamos los tensores crudos para que no haya control de flujo dinámico durante la exportación
-        return head_outputs["bbox_regression"], head_outputs["cls_logits"]
+# 1. Cargar el detector de objetos YOLO26 Nano preentrenado
+model_det = YOLO("yolo26n.pt")
 
-# 2. Cargar el detector de objetos SSDLite con MobileNetV3 Large preentrenado
-raw_detection_model = models.detection.ssdlite320_mobilenet_v3_large(pretrained=True).eval()
+# 2. Exportar a formato ExecuTorch
+# El método .export() devuelve la ruta de la carpeta con el modelo exportado
+export_dir = model_det.export(format="executorch")
 
-# 3. Instanciar wrapper en Float32
-model_det = SSDLiteWrapper(raw_detection_model)
+# 3. Copiar el modelo exportado a la ubicación raíz esperada
+shutil.copy(os.path.join(export_dir, "model.pte"), "yolo26.pte")
 
-# 4. Crear entrada de prueba en Float32 (320x320 píxeles)
-sample_input_det = (torch.randn(DETECTION_INPUT_SIZE),)
-
-# 5. Exportar el modelo
-exported_det = export(model_det, sample_input_det)
-
-# 6. Transformar y bajar a XNNPACK
-edge_program_det = to_edge_transform_and_lower(
-    exported_det,
-    partitioner=[XnnpackPartitioner()]
-)
-
-# 7. Serializar a formato .pte
-executorch_program_det = edge_program_det.to_executorch()
-with open("ssdlite.pte", "wb") as f:
-    f.write(executorch_program_det.buffer)
-
-print("Detección de Objetos: Modelo guardado con éxito como 'ssdlite.pte'")
+print("Detección de Objetos: Modelo guardado con éxito como 'yolo26.pte'")
