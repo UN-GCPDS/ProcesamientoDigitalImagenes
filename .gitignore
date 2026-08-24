@@ -208,4 +208,7 @@ __marimo__/
 
 # Mockups de diseño (referencia local, no se publican)
 Pagina/mockup/
+
+# Presentaciones: el workflow las copia de Clase N/ al desplegar
+Pagina/assets/presentaciones/
 Clases raw/

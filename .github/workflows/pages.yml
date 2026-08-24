@@ -27,6 +27,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare presentaciones PDF
+        run: |
+          mkdir -p Pagina/assets/presentaciones
+          cp "Clase 1/Vision por computador presentacion.pdf" Pagina/assets/presentaciones/clase-1-presentacion.pdf
+          cp "Clase 11/Clase 11 - Presentacion.pdf" Pagina/assets/presentaciones/clase-11-presentacion.pdf
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
