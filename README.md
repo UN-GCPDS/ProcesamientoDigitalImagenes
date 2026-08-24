@@ -41,19 +41,10 @@ La página de la asignatura se publica con **GitHub Pages** desde la carpeta `Pa
 - Cada carpeta `Clase N/` contiene el notebook (`.ipynb`), y en algunos casos el quiz (`Quizz.md`), figuras de ejemplo y la presentación (`.pdf`).
 - Las carpetas `Clases raw/` (notebooks convertidos a `.py` con Jupytext y sinopsis) y `Pagina/mockup/` (mockups de diseño) son material de trabajo local y **no se incluyen** en el repositorio.
 
-## 🚀 Despliegue
-
-El sitio se actualiza automáticamente con cada push. Para publicar manualmente, ejecuta el workflow **"Deploy to GitHub Pages"** desde la pestaña *Actions* del repositorio (opción *Run workflow*).
-
-Requisitos en *Settings → Pages*:
-
-1. **Source:** seleccionar **GitHub Actions** (el workflow se encarga del build y deploy).
-2. El workflow descarga el contenido de `Pagina/` y lo publica como sitio estático.
-
 ## 🛠️ Stack tecnológico
 
 Python · NumPy · Matplotlib · OpenCV · PyTorch · TorchVision · Ultralytics (YOLO) · Roboflow · Hugging Face (diffusers, Spaces) · Gradio · ExecuTorch · scikit-learn · scipy
 
 ## 📄 Licencia
 
-Este proyecto está licenciado bajo la [MIT License](LICENSE) (© 2025 SPRG).
+Este proyecto está licenciado bajo la [MIT License](LICENSE) (© 2026 UNAL-Manizales/GCPDS).
