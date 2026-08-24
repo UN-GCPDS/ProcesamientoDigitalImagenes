@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Unidad 3: Despliegue en nube y embebido</title>
+  <!-- Material Symbols -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+    rel="stylesheet">
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link href="https://fonts.googleapis.com" rel="preconnect">
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap"
+    rel="stylesheet">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Tailwind Configuration -->
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-container-highest": "#e0e3e5",
+            "primary": "#0052cc",
+            "on-secondary": "#ffffff",
+            "inverse-primary": "#8ebcfc",
+            "surface-tint": "#0052cc",
+            "secondary": "#545f73",
+            "inverse-surface": "#2d3133",
+            "on-primary-fixed": "#001a4d",
+            "background": "#f7f9fb",
+            "on-error": "#ffffff",
+            "surface-variant": "#e0e3e5",
+            "surface-container-low": "#f2f4f6",
+            "tertiary-container": "#3c4c61",
+            "on-background": "#191c1e",
+            "on-tertiary-fixed-variant": "#38485d",
+            "tertiary-fixed-dim": "#b7c8e1",
+            "tertiary": "#25354a",
+            "on-primary-container": "#d6e4ff",
+            "error-container": "#ffdad6",
+            "on-secondary-fixed": "#111c2d",
+            "on-error-container": "#93000a",
+            "surface-container-high": "#e6e8ea",
+            "on-secondary-fixed-variant": "#3c475a",
+            "on-tertiary": "#ffffff",
+            "error": "#ba1a1a",
+            "on-tertiary-container": "#acbcd6",
+            "surface": "#f7f9fb",
+            "secondary-fixed": "#d8e3fb",
+            "surface-container": "#eceef0",
+            "on-surface": "#191c1e",
+            "primary-container": "#003d99",
+            "primary-fixed-dim": "#8ebcfc",
+            "on-secondary-container": "#586377",
+            "primary-fixed": "#b3d4ff",
+            "outline": "#6f7974",
+            "on-primary-fixed-variant": "#003399",
+            "surface-bright": "#f7f9fb",
+            "on-primary": "#ffffff",
+            "surface-dim": "#d8dadc",
+            "secondary-container": "#d5e0f8",
+            "on-surface-variant": "#3f4944",
+            "outline-variant": "#bfc9c2",
+            "secondary-fixed-dim": "#bcc7de",
+            "surface-container-lowest": "#ffffff",
+            "tertiary-fixed": "#d3e4fe",
+            "on-tertiary-fixed": "#0b1c30",
+            "inverse-on-surface": "#eff1f3"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "container-max-width": "1280px",
+            "stack-md": "16px",
+            "stack-lg": "32px",
+            "unit": "4px",
+            "margin-mobile": "16px",
+            "stack-sm": "8px",
+            "gutter": "24px",
+            "margin-desktop": "40px"
+          },
+          "fontFamily": {
+            "label-sm": ["Inter"],
+            "mono": ["JetBrains Mono"],
+            "headline-md": ["Inter"],
+            "label-md": ["Inter"],
+            "headline-lg-mobile": ["Inter"],
+            "headline-lg": ["Inter"],
+            "display-lg": ["Inter"],
+            "body-md": ["Inter"],
+            "body-lg": ["Inter"]
+          },
+          "fontSize": {
+            "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+            "mono": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+            "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+            "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+            "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+            "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+          }
+        },
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar for a cleaner look */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f7f9fb;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #bfc9c2;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6f7974;
+    }
+
+    .dark body {
+      background: #121417;
+      color: #eff1f3;
+    }
+
+    .dark .bg-background,
+    .dark .bg-surface,
+    .dark .bg-surface-dim {
+      background-color: #121417 !important;
+    }
+
+    .dark .bg-surface-container-lowest {
+      background-color: #1b1f21 !important;
+      border-color: #33383b !important;
+    }
+
+    .dark .bg-surface-container-low {
+      background-color: #23272a !important;
+      border-color: #33383b !important;
+    }
+
+    .dark .bg-surface-container {
+      background-color: #1e2224 !important;
+      border-color: #33383b !important;
+    }
+
+    .dark .bg-surface-container-high,
+    .dark .bg-surface-container-highest {
+      background-color: #262a2d !important;
+    }
+
+    .dark .border-outline-variant {
+      border-color: #33383b !important;
+    }
+
+    .dark .border-outline {
+      border-color: #5c666a !important;
+    }
+
+    .dark .text-on-background {
+      color: #eff1f3 !important;
+    }
+
+    .dark .text-on-surface {
+      color: #eff1f3 !important;
+    }
+
+    .dark .text-on-surface-variant {
+      color: #b6bfc2 !important;
+    }
+
+    .dark .text-secondary {
+      color: #b6bfc2 !important;
+    }
+
+    .dark .text-primary {
+      color: #8ebcfc !important;
+    }
+
+    .dark .font-mono.text-secondary,
+    .dark .text-label-sm.text-secondary {
+      color: #b6bfc2 !important;
+    }
+
+    .dark .bg-primary\/10 {
+      background-color: rgba(0, 82, 204, 0.25) !important;
+    }
+
+    .dark .border-primary\/20,
+    .dark .border-primary\/30 {
+      border-color: rgba(142, 188, 252, 0.4) !important;
+    }
+
+    .dark .bg-secondary\/10 {
+      background-color: rgba(84, 95, 115, 0.3) !important;
+    }
+
+    .dark .bg-error\/10 {
+      background-color: rgba(186, 26, 26, 0.3) !important;
+    }
+  </style>
+  <script>
+    // Theme toggle
+    document.addEventListener('DOMContentLoaded', function () {
+      const btn = document.getElementById('theme-toggle');
+      const icon = document.getElementById('theme-icon');
+      const html = document.documentElement;
+
+      function applyTheme(saved) {
+        if (saved === 'dark') {
+          html.classList.add('dark');
+          icon.textContent = 'light_mode';
+        } else {
+          html.classList.remove('dark');
+          icon.textContent = 'dark_mode';
+        }
+      }
+
+      const saved = localStorage.getItem('pdi-theme') ||
+        (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      applyTheme(saved);
+
+      btn.addEventListener('click', function () {
+        const isDark = html.classList.contains('dark');
+        const next = isDark ? 'light' : 'dark';
+        localStorage.setItem('pdi-theme', next);
+        applyTheme(next);
+      });
+    });
+  </script>
+</head>
+
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col">
+  <!-- TopNavBar -->
+  <nav
+    class="fixed top-0 left-0 w-full z-50 flex items-center px-margin-mobile md:px-margin-desktop bg-surface-container-lowest h-16 border-b border-outline-variant">
+    <div class="flex items-center justify-start flex-1 min-w-0 gap-stack-md">
+      <div class="flex gap-2 items-center flex-shrink-0">
+        <img alt="Logo UNAL" class="h-14 w-auto object-contain rounded-DEFAULT" src="../assets/logo_unal.png">
+      </div>
+      <div class="w-px h-6 bg-outline-variant mx-2 flex-shrink-0"></div>
+      <a href="../index.html"
+        class="font-headline-md text-headline-md text-primary truncate hover:opacity-80 transition-opacity">Procesamiento
+        Digital de Imágenes</a>
+    </div>
+    <div class="flex items-center gap-stack-sm text-primary shrink-0">
+      <a class="hidden md:flex items-center font-label-md text-label-md text-primary font-bold mr-2"
+        href="https://github.com/UN-GCPDS/ProcesamientoDigitalImagenes" target="_blank" rel="noopener">GitHub</a>
+      <button id="theme-toggle" aria-label="Cambiar tema"
+        class="p-2 hover:bg-surface-container-low rounded-full transition-all cursor-pointer active:opacity-80">
+        <span id="theme-icon" class="material-symbols-outlined">dark_mode</span>
+      </button>
+    </div>
+  </nav>
+  <!-- Main Content -->
+  <main
+    class="flex-grow pt-[calc(64px+32px)] pb-stack-lg px-margin-mobile md:px-margin-desktop max-w-container-max-width mx-auto w-full">
+    <!-- Breadcrumbs -->
+    <nav aria-label="Breadcrumb" class="flex items-center text-on-surface-variant font-label-md mb-stack-md">
+      <a class="hover:text-primary transition-colors" href="../index.html">Inicio</a>
+      <span aria-hidden="true" class="material-symbols-outlined mx-2 text-[16px]">chevron_right</span>
+      <span class="text-on-surface font-semibold">Unidad 3</span>
+    </nav>
+    <!-- Header Section -->
+    <section
+      class="relative bg-surface-container-lowest border border-outline-variant p-stack-lg mb-stack-lg overflow-hidden group">
+      <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
+        class="absolute top-1/2 -translate-y-1/2 right-[5%] w-48 h-48 opacity-20 text-primary pointer-events-none z-0"
+        aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M70 100 C50 100 40 85 40 70 C40 50 60 40 80 40 C90 25 115 25 130 40 C150 40 165 55 165 75 C165 95 150 110 130 110 H125" stroke-width="3" stroke-opacity="0.8" />
+          <rect x="90" y="100" width="60" height="60" rx="4" stroke-width="3" stroke-opacity="0.7" />
+          <line x1="105" y1="100" x2="105" y2="92" stroke-opacity="0.5" />
+          <line x1="135" y1="100" x2="135" y2="92" stroke-opacity="0.5" />
+          <line x1="105" y1="160" x2="105" y2="168" stroke-opacity="0.5" />
+          <line x1="135" y1="160" x2="135" y2="168" stroke-opacity="0.5" />
+          <line x1="90" y1="115" x2="82" y2="115" stroke-opacity="0.5" />
+          <line x1="90" y1="145" x2="82" y2="145" stroke-opacity="0.5" />
+          <line x1="150" y1="115" x2="158" y2="115" stroke-opacity="0.5" />
+          <line x1="150" y1="145" x2="158" y2="145" stroke-opacity="0.5" />
+          <circle cx="120" cy="130" r="8" stroke-width="2" stroke-opacity="0.6" />
+          <rect x="116" y="126" width="8" height="8" rx="1" fill="currentColor" fill-opacity="0.3" stroke="none" />
+          <path d="M100 75 V90" stroke-dasharray="4 4" stroke-opacity="0.4" />
+          <path d="M30 30 L45 45" stroke-opacity="0.3" />
+          <path d="M170 170 L155 155" stroke-opacity="0.3" />
+        </g>
+      </svg>
+      <div class="relative z-10 max-w-3xl">
+        <h1 class="font-display-lg text-display-lg text-on-surface mb-2">Unidad 3: Despliegue en nube y embebido</h1>
+        <p class="font-headline-md text-headline-md text-on-surface-variant mb-stack-md">Clase 12: ExecuTorch y Hugging
+          Face Spaces</p>
+        <p class="font-body-lg text-body-lg text-on-surface mb-stack-lg">
+          Llevar modelos entrenados a producción en dispositivos edge y en la nube mediante ExecuTorch y Hugging Face
+          Spaces, con empaquetado final para el portfolio.
+        </p>
+      </div>
+    </section>
+    <!-- Layout Grid for Content & Sidebar -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+      <!-- Main Content Area (Clases) -->
+      <div class="lg:col-span-8 flex flex-col gap-stack-md">
+        <!-- Clase 12a Card -->
+        <div class="bg-surface-container-lowest border border-outline-variant p-stack-md hover:border-primary transition-colors">
+          <div class="flex justify-between items-start mb-stack-sm">
+            <div>
+              <span class="font-label-md text-primary tracking-widest uppercase mb-baseline block">Clase 12a</span>
+              <h2 class="font-headline-md text-headline-md text-on-surface">Exportación a Edge con ExecuTorch</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="bg-secondary/10 text-secondary font-label-sm px-2 py-1 rounded flex items-center gap-1">
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">science</span> Lab
+              </span>
+            </div>
+          </div>
+          <ul class="font-body-md text-on-surface-variant mb-stack-md list-disc list-inside">
+            <li>Ciclo de vida de exportación: torch.export, EXIR y XNNPACK</li>
+            <li>Serialización a formato .pte para inferencia edge</li>
+            <li>Exportación de MobileNetV2 (clasificación)</li>
+            <li>Exportación de DeepLabV3 (segmentación)</li>
+            <li>Exportación de YOLO26 NMS-free (detección)</li>
+          </ul>
+          <a class="bg-primary text-on-primary font-label-md px-4 py-2 rounded hover:bg-primary-fixed-dim hover:text-on-primary-fixed transition-colors inline-block"
+            href="clase-12.html">Explorar Clase</a>
+        </div>
+        <!-- Clase 12b Card -->
+        <div class="bg-surface-container-lowest border border-outline-variant p-stack-md hover:border-primary transition-colors">
+          <div class="flex justify-between items-start mb-stack-sm">
+            <div>
+              <span class="font-label-md text-primary tracking-widest uppercase mb-baseline block">Clase 12b</span>
+              <h2 class="font-headline-md text-headline-md text-on-surface">Despliegue en la Nube con Hugging Face Spaces y Gradio</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="bg-secondary/10 text-secondary font-label-sm px-2 py-1 rounded flex items-center gap-1">
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">science</span> Lab
+              </span>
+            </div>
+          </div>
+          <ul class="font-body-md text-on-surface-variant mb-stack-md list-disc list-inside">
+            <li>Arquitectura de despliegue y autenticación con huggingface_hub</li>
+            <li>Repositorio del Space y configuración de Git LFS</li>
+            <li>app.py: servidor Gradio multimodelo con fallback</li>
+            <li>Dockerfile y README con metadatos</li>
+            <li>Publicación y pruebas de cliente con gradio_client</li>
+          </ul>
+          <a class="bg-primary text-on-primary font-label-md px-4 py-2 rounded hover:bg-primary-fixed-dim hover:text-on-primary-fixed transition-colors inline-block"
+            href="clase-12.html">Explorar Clase</a>
+        </div>
+        <!-- Clase 12 Card -->
+        <div class="bg-surface-container-lowest border border-outline-variant p-stack-md hover:border-primary transition-colors">
+          <div class="flex justify-between items-start mb-stack-sm">
+            <div>
+              <span class="font-label-md text-primary tracking-widest uppercase mb-baseline block">Clase 12</span>
+              <h2 class="font-headline-md text-headline-md text-on-surface">Portfolio y Empacado Final</h2>
+            </div>
+            <div class="flex gap-2">
+              <span class="bg-secondary/10 text-secondary font-label-sm px-2 py-1 rounded flex items-center gap-1">
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">science</span> Lab
+              </span>
+            </div>
+          </div>
+          <ul class="font-body-md text-on-surface-variant mb-stack-md list-disc list-inside">
+            <li>Demo interactiva multimodelo de clasificación, segmentación y detección</li>
+            <li>Copiado de los modelos .pte y empaquetado</li>
+            <li>Publicación final del Space para el portfolio</li>
+          </ul>
+          <a class="bg-primary text-on-primary font-label-md px-4 py-2 rounded hover:bg-primary-fixed-dim hover:text-on-primary-fixed transition-colors inline-block"
+            href="clase-12.html">Explorar Clase</a>
+        </div>
+      </div>
+      <!-- Sidebar -->
+      <div class="lg:col-span-4">
+        <div class="bg-surface-container-lowest border border-outline-variant p-stack-md sticky top-24">
+          <h3 class="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-outline-variant pb-2">Recursos de la Unidad</h3>
+          <ul class="flex flex-col gap-baseline">
+            <li>
+              <a class="flex items-center gap-3 p-2 hover:bg-surface transition-colors group" href="#">
+                <span aria-hidden="true" class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">menu_book</span>
+                <span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Notebooks de la Unidad 3</span>
+              </a>
+            </li>
+            <li>
+              <a class="flex items-center gap-3 p-2 hover:bg-surface transition-colors group" href="#">
+                <span aria-hidden="true" class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">terminal</span>
+                <span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Modelos .pte (ExecuTorch)</span>
+              </a>
+            </li>
+            <li>
+              <a class="flex items-center gap-3 p-2 hover:bg-surface transition-colors group" href="#">
+                <span aria-hidden="true" class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">upload</span>
+                <span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Space de Hugging Face</span>
+              </a>
+            </li>
+          </ul>
+          <div class="mt-stack-lg pt-stack-md border-t border-outline-variant">
+            <h4 class="font-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Evaluación</h4>
+            <div class="bg-error-container/20 border border-error-container p-3 rounded">
+              <p class="font-label-md text-on-surface font-semibold">Portfolio Final</p>
+              <p class="font-body-md text-on-surface-variant text-sm mt-1 flex items-center gap-1">
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">assignment</span> Empacado final del curso
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <!-- Footer -->
+  <footer
+    class="w-full flex flex-col md:flex-row justify-between items-center gap-stack-md py-stack-lg border-t border-outline-variant bg-surface-container px-margin-mobile md:px-margin-desktop">
+    <div class="font-label-sm text-label-sm text-on-surface text-center md:text-left">
+      © 2026 Universidad Nacional de Colombia - Sede Manizales
+    </div>
+    <div
+      class="flex flex-col sm:flex-row flex-wrap justify-center md:justify-end items-center gap-stack-md font-label-sm text-label-sm text-secondary">
+      <a class="flex items-center gap-2 hover:text-primary transition-colors"
+        href="https://amalvarezme.github.io/LaboratorioIA_UNAL/" target="_blank" rel="noopener">
+        <img alt="Logo Lab IA" class="h-5 w-5 object-contain" src="../assets/logo_labIA.png">
+        Lab IA
+      </a>
+      <a class="flex items-center gap-2 hover:text-primary transition-colors"
+        href="https://amalvarezme.github.io/LaboratorioIA_UNAL/" target="_blank" rel="noopener">
+        <img alt="Logo GCPDS" class="h-5 w-5 object-contain" src="../assets/logogcpds.png">
+        GCPDS
+      </a>
+    </div>
+  </footer>
+</body>
+
+</html>
