@@ -23,8 +23,9 @@ La página de la asignatura se publica con **GitHub Pages** desde la carpeta `Pa
 ## 📁 Estructura del repositorio
 
 ```
-├── Clase N/            # Material por clase (notebooks .ipynb, quizzes, figuras, PDFs)
-├── Clases raw/         # Versiones .py (conversión Jupytext) + sinopsis.md de cada clase
+├── .github/
+│   └── workflows/pages.yml   # Deploy a GitHub Pages
+├── Clase N/            # Material de cada clase (notebooks .ipynb, quizzes, figuras, PDFs)
 ├── Parcial 1/          # Evaluación parcial
 ├── Taller 1/           # Taller práctico
 └── Pagina/             # Sitio web (GitHub Pages)
@@ -35,16 +36,10 @@ La página de la asignatura se publica con **GitHub Pages** desde la carpeta `Pa
     └── assets/         # logos institucionales
 ```
 
-### Legibilidad de los notebooks
+### Notas
 
-Por eficiencia de tokens y legibilidad, los notebooks también se mantienen como scripts `.py` en formato **Jupytext** (percent `# %%`) dentro de `Clases raw/`. Para abrirlos:
-
-```bash
-pip install jupytext jupyter
-jupytext --to ipynb "Clases raw/Clase 1/Clase 1.py"   # genera el notebook
-```
-
-Cada carpeta de `Clases raw/` incluye un `sinopsis.md` con el objetivo, tecnologías y contenido detallado de la clase.
+- Cada carpeta `Clase N/` contiene el notebook (`.ipynb`), y en algunos casos el quiz (`Quizz.md`), figuras de ejemplo y la presentación (`.pdf`).
+- Las carpetas `Clases raw/` (notebooks convertidos a `.py` con Jupytext y sinopsis) y `Pagina/mockup/` (mockups de diseño) son material de trabajo local y **no se incluyen** en el repositorio.
 
 ## 🚀 Despliegue
 
@@ -61,4 +56,4 @@ Python · NumPy · Matplotlib · OpenCV · PyTorch · TorchVision · Ultralytics
 
 ## 📄 Licencia
 
-Este proyecto está licenciado bajo la [MIT License](LICENSE).
+Este proyecto está licenciado bajo la [MIT License](LICENSE) (© 2025 SPRG).
