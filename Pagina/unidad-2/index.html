@@ -248,10 +248,10 @@
 <body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col">
   <!-- TopNavBar -->
   <nav
-    class="fixed top-0 left-0 w-full z-50 flex items-center px-margin-mobile md:px-margin-desktop bg-surface-container-lowest h-16 border-b border-outline-variant">
+    class="fixed top-0 left-0 w-full z-50 flex items-center px-margin-mobile md:px-margin-desktop bg-surface-container-lowest h-20 border-b border-outline-variant">
     <div class="flex items-center justify-start flex-1 min-w-0 gap-stack-md">
       <div class="flex gap-2 items-center flex-shrink-0">
-        <img alt="Logo UNAL" class="h-14 w-auto object-contain rounded-DEFAULT" src="../assets/logo_unal.png">
+        <img alt="Logo UNAL" class="h-16 w-auto object-contain rounded-DEFAULT" src="../assets/logo_unal.png">
       </div>
       <div class="w-px h-6 bg-outline-variant mx-2 flex-shrink-0"></div>
       <a href="../index.html"
@@ -269,7 +269,7 @@
   </nav>
   <!-- Main Content -->
   <main
-    class="flex-grow pt-[calc(64px+32px)] pb-stack-lg px-margin-mobile md:px-margin-desktop max-w-container-max-width mx-auto w-full">
+    class="flex-grow pt-[calc(80px+32px)] pb-stack-lg px-margin-mobile md:px-margin-desktop max-w-container-max-width mx-auto w-full">
     <!-- Breadcrumbs -->
     <nav aria-label="Breadcrumb" class="flex items-center text-on-surface-variant font-label-md mb-stack-md">
       <a class="hover:text-primary transition-colors" href="../index.html">Inicio</a>
@@ -491,26 +491,55 @@
       <div class="lg:col-span-4">
         <div class="bg-surface-container-lowest border border-outline-variant p-stack-md sticky top-24">
           <h3 class="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-outline-variant pb-2">Recursos de la Unidad</h3>
-          <ul class="flex flex-col gap-baseline">
-            <li>
-              <a class="flex items-center gap-3 p-2 hover:bg-surface transition-colors group" href="#">
-                <span aria-hidden="true" class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">menu_book</span>
-                <span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Notebooks de la Unidad 2</span>
-              </a>
+          <div class="mb-2">
+            <p class="font-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Curso complementario • DataCamp</p>
+            <a href="https://app.datacamp.com/learn/courses/deep-learning-for-images-with-pytorch" target="_blank" rel="noopener"
+              class="block p-3 border border-primary/30 bg-primary/10 hover:border-primary transition-colors group rounded">
+              <div class="flex items-start gap-3">
+                <span aria-hidden="true" class="material-symbols-outlined text-primary text-[22px]">play_circle</span>
+                <div class="min-w-0">
+                  <p class="font-label-md text-on-surface font-semibold leading-snug">Deep Learning for Images with PyTorch
+                    <span aria-hidden="true" class="material-symbols-outlined text-[14px] align-middle">open_in_new</span>
+                  </p>
+                  <p class="font-body-md text-on-surface-variant text-sm mt-1">4 capítulos • 58 ejercicios • ~4 h • Avanzado • PyTorch</p>
+                </div>
+              </div>
+            </a>
+          </div>
+          <ol class="flex flex-col">
+            <li class="flex gap-3 p-2 border-l-2 border-outline-variant hover:border-primary transition-colors">
+              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-label-sm flex items-center justify-center border border-primary/20">1</span>
+              <div class="min-w-0">
+                <p class="font-label-md text-on-surface font-semibold leading-snug">Image Classification with CNNs</p>
+                <p class="font-body-md text-on-surface-variant text-sm mt-0.5">Clasificación binaria y multiclase, capas convolucionales y transfer learning.</p>
+
+              </div>
             </li>
-            <li>
-              <a class="flex items-center gap-3 p-2 hover:bg-surface transition-colors group" href="#">
-                <span aria-hidden="true" class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">dataset</span>
-                <span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Datasets (Roboflow, COCO, PennFudanPed)</span>
-              </a>
+            <li class="flex gap-3 p-2 border-l-2 border-outline-variant hover:border-primary transition-colors">
+              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-label-sm flex items-center justify-center border border-primary/20">2</span>
+              <div class="min-w-0">
+                <p class="font-label-md text-on-surface font-semibold leading-snug">Object Recognition</p>
+                <p class="font-body-md text-on-surface-variant text-sm mt-0.5">Bounding boxes, IoU, NMS y detección con R-CNN y Faster R-CNN.</p>
+
+              </div>
             </li>
-            <li>
-              <a class="flex items-center gap-3 p-2 hover:bg-surface transition-colors group" href="#">
-                <span aria-hidden="true" class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">quiz</span>
-                <span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Quizzes de la Unidad 2</span>
-              </a>
+            <li class="flex gap-3 p-2 border-l-2 border-outline-variant hover:border-primary transition-colors">
+              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-label-sm flex items-center justify-center border border-primary/20">3</span>
+              <div class="min-w-0">
+                <p class="font-label-md text-on-surface font-semibold leading-snug">Image Segmentation</p>
+                <p class="font-body-md text-on-surface-variant text-sm mt-0.5">Segmentación semántica, de instancia y panóptica con Mask R-CNN y U-Net.</p>
+
+              </div>
             </li>
-          </ul>
+            <li class="flex gap-3 p-2 border-l-2 border-outline-variant hover:border-primary transition-colors">
+              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-label-sm flex items-center justify-center border border-primary/20">4</span>
+              <div class="min-w-0">
+                <p class="font-label-md text-on-surface font-semibold leading-snug">Image Generation with GANs</p>
+                <p class="font-body-md text-on-surface-variant text-sm mt-0.5">DCGANs: generador, discriminador, entrenamiento y evaluación con FID.</p>
+
+              </div>
+            </li>
+          </ol>
           <div class="mt-stack-lg pt-stack-md border-t border-outline-variant">
             <h4 class="font-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Evaluación</h4>
             <div class="bg-error-container/20 border border-error-container p-3 rounded">
@@ -526,7 +555,7 @@
   </main>
   <!-- Footer -->
   <footer
-    class="w-full flex flex-col md:flex-row justify-between items-center gap-stack-md py-stack-lg border-t border-outline-variant bg-surface-container px-margin-mobile md:px-margin-desktop">
+    class="w-full flex flex-col md:flex-row justify-between items-center gap-stack-md py-stack-sm border-t border-outline-variant bg-surface-container px-margin-mobile md:px-margin-desktop">
     <div class="font-label-sm text-label-sm text-on-surface text-center md:text-left">
       © 2026 Universidad Nacional de Colombia - Sede Manizales
     </div>
@@ -534,12 +563,12 @@
       class="flex flex-col sm:flex-row flex-wrap justify-center md:justify-end items-center gap-stack-md font-label-sm text-label-sm text-secondary">
       <a class="flex items-center gap-2 hover:text-primary transition-colors"
         href="https://amalvarezme.github.io/LaboratorioIA_UNAL/" target="_blank" rel="noopener">
-        <img alt="Logo Lab IA" class="h-5 w-5 object-contain" src="../assets/logo_labIA.png">
+        <img alt="Logo Lab IA" class="h-16 w-16 object-contain" src="../assets/logo_labIA.png">
         Lab IA
       </a>
       <a class="flex items-center gap-2 hover:text-primary transition-colors"
         href="https://amalvarezme.github.io/LaboratorioIA_UNAL/" target="_blank" rel="noopener">
-        <img alt="Logo GCPDS" class="h-5 w-5 object-contain" src="../assets/logogcpds.png">
+        <img alt="Logo GCPDS" class="h-16 w-16 object-contain" src="../assets/logogcpds.png">
         GCPDS
       </a>
     </div>

@@ -30,8 +30,45 @@ jobs:
       - name: Prepare presentaciones PDF
         run: |
           mkdir -p Pagina/assets/presentaciones
-          cp "Clase 1/Vision por computador presentacion.pdf" Pagina/assets/presentaciones/clase-1-presentacion.pdf
-          cp "Clase 11/Clase 11 - Presentacion.pdf" Pagina/assets/presentaciones/clase-11-presentacion.pdf
+
+          copy_pdf() {
+            if [ -f "$1" ]; then
+              cp "$1" "$2"
+              echo "Copiado: $1 -> $2"
+            else
+              echo "::warning::PDF no encontrado, se omite: $1"
+            fi
+          }
+
+          # Mapeo explícito actual (tolerante: no tumba el deploy si falta la fuente)
+          copy_pdf "Clase 1/Vision por computador presentacion.pdf" Pagina/assets/presentaciones/clase-1-presentacion.pdf
+          copy_pdf "Clase 11/Clase 11 - Presentacion.pdf" Pagina/assets/presentaciones/clase-11-presentacion.pdf
+
+          # Escalable: resuelve automáticamente futuras referencias en el HTML
+          # Convención: presentaciones/clase-N-*.pdf <- Clase N/*.pdf (primer PDF encontrado)
+          grep -rhoE 'presentaciones/[A-Za-z0-9._-]+\.pdf' Pagina/unidad-*/ 2>/dev/null | sort -u | while read -r ref; do
+            dest="Pagina/assets/$ref"
+            if [ -f "$dest" ]; then
+              continue
+            fi
+            base="$(basename "$ref" .pdf)"
+            num="$(echo "$base" | grep -oE '[0-9]+' | head -n 1)"
+            if [ -n "$num" ]; then
+              src="$(find "Clase $num" -maxdepth 1 -iname '*.pdf' 2>/dev/null | head -n 1)"
+              if [ -n "$src" ]; then
+                copy_pdf "$src" "$dest"
+              else
+                echo "::warning::Referencia sin fuente: $ref (no hay PDF en Clase $num)"
+              fi
+            else
+              echo "::warning::Referencia sin PDF generado: $ref"
+            fi
+          done
+
+          ls -la Pagina/assets/presentaciones || true
+
+      - name: Exclude mockup from artifact
+        run: rm -rf Pagina/mockup
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
