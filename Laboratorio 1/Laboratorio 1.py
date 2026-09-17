@@ -31,8 +31,8 @@
 #
 # ## 1.2. Organización del trabajo
 #
-# * **Primera hora (práctica):** secciones 2 a 7 de este cuaderno, en orden y sin saltarse celdas. Tiempo total de cómputo inferior a 2 minutos en cualquier portátil.
-# * **Segunda hora (informe):** completar dentro de este mismo cuaderno las tablas `[E1]`, `[E2]` y las respuestas `[P1]`, `[P2]`, `[P3]`. No se entrega ningún documento adicional.
+# * **Práctica:** secciones 2 a 7 de este cuaderno, en orden y sin saltarse celdas.
+# * **Informe:** completar dentro de este mismo cuaderno las tablas `[E1]`, `[E2]` y las respuestas `[P1]`, `[P2]`, `[P3]`. No se entrega ningún documento adicional.
 # * **Entrega:** subir a Classroom el archivo `.ipynb` con todas las celdas ejecutadas (con salidas visibles) y las respuestas diligenciadas. La sección 8 verifica que la entrega esté completa antes de subirla.
 #
 # ## 1.3. Requisitos de software
@@ -193,7 +193,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 2.4. Referencia de parámetros (lectura, 2 min)
+# ## 2.4. Referencia de parámetros (lectura)
 #
 # Cada ejercicio define sus parámetros al inicio de su propia celda: modifíquelos ahí mismo y vuelva a ejecutar la celda. No necesita subir hasta aquí ni tocar las funciones de la sección 3. Esta sección resume el fundamento:
 #
@@ -278,7 +278,7 @@ def dibujar(bgr: np.ndarray, cajas=(), puntos=None) -> np.ndarray:
 
 
 # %% [markdown]
-# # 4. Ejercicio 1 — Preproceso y Ecualización [10 min]
+# # 4. Ejercicio 1 — Preproceso y Ecualización
 #
 # **Procedimiento:**
 # 1. Ejecute la celda y observe las tres columnas: imagen original, gris con suavizado y gris ecualizado, con sus histogramas debajo.
@@ -313,7 +313,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# # 5. Ejercicio 2 — Detección de Rostros con YuNet [20 min]
+# # 5. Ejercicio 2 — Detección de Rostros con YuNet
 #
 # **Procedimiento:**
 # 1. Ejecute la celda con los valores por defecto (`SCORE_THRESHOLD = 0.6`, `NMS_THRESHOLD = 0.3`). Registre en la Tabla `[E1]` el número de caras y los puntajes de cada una de sus 3 fotos. Si el conteo supera el número de personas visibles, no es un error: son falsos positivos; regístrelos tal cual y explíquelos en `[P1]`.
@@ -372,7 +372,7 @@ for nombre, r in resultados.items():
 # *(Escriba su respuesta aquí. Mínimo 4 líneas con argumento técnico. No deje el marcador.)*
 
 # %% [markdown]
-# # 6. Ejercicio 3 — Piel en HSV y Limpieza Morfológica [15 min]
+# # 6. Ejercicio 3 — Piel en HSV y Limpieza Morfológica
 #
 # **Procedimiento:**
 # 1. Ejecute la celda: toma el rostro más grande de `frontal.jpg` (o de la primera imagen con detección), segmenta piel en HSV y compara la máscara cruda frente a la limpia con `OPEN 3x3 + CLOSE 5x5`.
@@ -453,7 +453,7 @@ plt.show()
 # *(Escriba su respuesta aquí. Mínimo 4 líneas con argumento técnico. No deje el marcador.)*
 
 # %% [markdown]
-# # 7. Ejercicio 4 — Rasgos, Bordes y Figura Final [15 min]
+# # 7. Ejercicio 4 — Rasgos, Bordes y Figura Final
 #
 # **Procedimiento:**
 # 1. Ejecute la primera celda: toma los ojos del rostro (landmarks que entrega YuNet, sin costo adicional) y compara el detector de bordes de Canny —aplicado sobre el gris ecualizado del Ejercicio 1— frente al gradiente morfológico.
