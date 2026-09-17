@@ -104,6 +104,10 @@ MODELO_PATH = BASE_DIR / "modelo" / MODELO_NOMBRE
 # la sección 8 las resume para la entrega y la calificación.
 METRICAS = {"nombre": ESTUDIANTE_NOMBRE, "grupo": ESTUDIANTE_GRUPO}
 
+# Tamaño de figuras y ruta de salida (valores fijos, no se experimenta con ellos).
+FIGSIZE = (15, 8)
+SALIDA_PNG = BASE_DIR / "resultado.png"
+
 # %% [markdown]
 # ## 2.2. Carga de sus fotografías
 #
@@ -132,6 +136,10 @@ if EN_COLAB:
             destino = IMG_DIR / Path(nombre).name
             destino.write_bytes(datos)
             print(f"Guardada: {destino} ({len(datos) // 1024} KB)")
+            # files.upload() deja además una copia en el directorio de trabajo; se elimina para no duplicar.
+            duplicado = Path.cwd() / Path(nombre).name
+            if duplicado.exists() and duplicado.resolve() != destino.resolve():
+                duplicado.unlink()
     except ImportError:
         print("No se encontró el módulo de subida. Suba las fotos con el panel de archivos de Colab a img/ y vuelva a ejecutar.")
 else:
@@ -185,47 +193,25 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 2.4. Parámetros del laboratorio
+# ## 2.4. Referencia de parámetros (lectura, 2 min)
 #
-# Todos los valores que se experimentan están reunidos aquí. Para los experimentos indicados basta con modificar el parámetro, volver a ejecutar la celda del ejercicio correspondiente y registrar el resultado en la tabla. No es necesario modificar las funciones de la sección 3.
+# Cada ejercicio define sus parámetros al inicio de su propia celda: modifíquelos ahí mismo y vuelva a ejecutar la celda. No necesita subir hasta aquí ni tocar las funciones de la sección 3. Esta sección resume el fundamento:
 #
 # El detector YuNet asigna a cada candidato un puntaje de confianza $s$ y luego
-# fusiona cajas traslapadas con supresión de no-máximos (NMS). Dos umbrales controlan el compromiso entre detecciones y falsos positivos:
+# fusiona cajas traslapadas con supresión de no-máximos (NMS). Dos umbrales controlan el compromiso entre detecciones y falsos positivos (Ejercicio 2):
 #
 # $$detección = 1 \iff s \ge \tau_{score} \quad ; \quad IoU(A,B) = \frac{|A \cap B|}{|A \cup B|}, \; \text{se suprime si } IoU > \tau_{nms}$$
 #
 # * `SCORE_THRESHOLD` alto conserva solo caras seguras: menos falsos positivos, pero puede borrar caras difíciles.
 # * `NMS_THRESHOLD` laxo (cercano a 1.0) deja sobrevivir cajas traslapadas duplicadas; estricto las fusiona (ver Clase 10: detectores NMS-Free).
-
-# %%
-# --- Preproceso ---
-GAUSS_KSIZE = (5, 5)  # Tamaño del kernel gaussiano. Debe ser impar.
-SIGMA = 0  # 0 = desviación calculada automáticamente desde el tamaño.
-
-# --- Detección YuNet (Ejercicio 2: experimentar con estos dos) ---
-SCORE_THRESHOLD = 0.6  # Experimento: comparar 0.6 frente a 0.95
-NMS_THRESHOLD = 0.3  # Experimento: comparar 0.3 frente a 0.9
-TOP_K = 5000  # Máximo de candidatos antes de NMS.
-
-# --- Segmentación de piel en HSV (Ejercicio 3) ---
-# Un píxel se clasifica como piel si sus tres canales están dentro del rango:
+#
+# Un píxel se clasifica como piel si sus tres canales HSV están dentro del rango (Ejercicio 3):
 # $$M(x,y) = 1 \iff H_{low} \le H \le H_{high} \land S_{low} \le S \le S_{high} \land V_{low} \le V \le V_{high}$$
 # Rangos de OpenCV: H en 0-179, S y V en 0-255.
-PIEL_LOW = np.array([0, 30, 60], dtype=np.uint8)
-PIEL_HIGH = np.array([20, 150, 255], dtype=np.uint8)
-
+#
 # Morfología: la apertura elimina puntos blancos aislados (sal) y el cierre
-# rellena huecos negros (pimienta):
+# rellena huecos negros (pimienta) (Ejercicio 3):
 # $$A \circ B = (A \ominus B) \oplus B \quad ; \quad A \bullet B = (A \oplus B) \ominus B$$
-KERNEL_OPEN = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))  # Experimento: comparar (3,3) frente a (7,7)
-KERNEL_CLOSE = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-
-# --- Bordes (Ejercicio 4) ---
-CANNY_T1 = 100  # Umbral bajo de histéresis.
-CANNY_T2 = 200  # Umbral alto de histéresis. Experimento opcional: (50,150) frente a (100,200).
-
-FIGSIZE = (15, 8)
-SALIDA_PNG = BASE_DIR / "resultado.png"
 
 # %% [markdown]
 # # 3. Funciones de Procesamiento
@@ -233,29 +219,27 @@ SALIDA_PNG = BASE_DIR / "resultado.png"
 # Estas funciones implementan el pipeline. Léalas para asociar cada operación con su fundamento (ecualización por acumulada $s_k = (L-1)\sum p(r_j)$, suavizado gaussiano $G(x,y)$, umbral de confianza, NMS por $IoU$, `inRange`, apertura/cierre). No requieren modificaciones.
 
 # %%
-def preprocesar(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def preprocesar(bgr: np.ndarray, ksize: tuple = (5, 5), sigma: float = 0) -> tuple[np.ndarray, np.ndarray]:
     """Convierte BGR a gris, suaviza y ecualiza. Devuelve (gris, gris_ecualizado)."""
     gris = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    gris = cv2.GaussianBlur(gris, GAUSS_KSIZE, SIGMA)
+    gris = cv2.GaussianBlur(gris, ksize, sigma)
     gris_eq = cv2.equalizeHist(gris)
     return gris, gris_eq
 
 
-def crear_detector() -> cv2.FaceDetectorYN:
-    """Crea el detector YuNet con los umbrales de la sección 2.4."""
-    return cv2.FaceDetectorYN_create(
-        str(MODELO_PATH), "", (320, 320), SCORE_THRESHOLD, NMS_THRESHOLD, TOP_K
-    )
+def crear_detector(score_thr: float, nms_thr: float, top_k: int) -> cv2.FaceDetectorYN:
+    """Crea el detector YuNet con los umbrales dados."""
+    return cv2.FaceDetectorYN_create(str(MODELO_PATH), "", (320, 320), score_thr, nms_thr, top_k)
 
 
-def detectar_rostros(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def detectar_rostros(bgr: np.ndarray, score_thr: float, nms_thr: float, top_k: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Detecta rostros en BGR. Devuelve (cajas Nx4 [x,y,w,h], landmarks Nx10, puntajes N).
 
     Cada fila de landmarks trae 5 puntos: ojo, ojo, nariz, boca, boca.
     """
     h, w = bgr.shape[:2]
     t0 = time.time()
-    detector = crear_detector()
+    detector = crear_detector(score_thr, nms_thr, top_k)
     detector.setInputSize((w, h))
     _, caras = detector.detect(bgr)
     dt = time.time() - t0
@@ -264,20 +248,20 @@ def detectar_rostros(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarra
     cajas = caras[:, :4].astype(int)
     puntos = caras[:, 4:14]
     puntajes = caras[:, 14]
-    print(f"  YuNet: {len(cajas)} cara(s) en {dt:.2f}s (score>={SCORE_THRESHOLD}, nms={NMS_THRESHOLD})")
+    print(f"  YuNet: {len(cajas)} cara(s) en {dt:.2f}s (score>={score_thr}, nms={nms_thr})")
     return cajas, puntos, puntajes
 
 
-def segmentar_piel_hsv(bgr_roi: np.ndarray) -> np.ndarray:
+def segmentar_piel_hsv(bgr_roi: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
     """Máscara binaria de piel en HSV mediante inRange."""
     hsv = cv2.cvtColor(bgr_roi, cv2.COLOR_BGR2HSV)
-    return cv2.inRange(hsv, PIEL_LOW, PIEL_HIGH)
+    return cv2.inRange(hsv, low, high)
 
 
-def limpiar_mascara(mask: np.ndarray) -> np.ndarray:
+def limpiar_mascara(mask: np.ndarray, k_open: np.ndarray, k_close: np.ndarray) -> np.ndarray:
     """Apertura para quitar sal y cierre para tapar pimienta."""
-    abierta = cv2.morphologyEx(mask, cv2.MORPH_OPEN, KERNEL_OPEN)
-    return cv2.morphologyEx(abierta, cv2.MORPH_CLOSE, KERNEL_CLOSE)
+    abierta = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k_open)
+    return cv2.morphologyEx(abierta, cv2.MORPH_CLOSE, k_close)
 
 
 def dibujar(bgr: np.ndarray, cajas=(), puntos=None) -> np.ndarray:
@@ -302,9 +286,12 @@ def dibujar(bgr: np.ndarray, cajas=(), puntos=None) -> np.ndarray:
 # 3. Este ejercicio es formativo (sin entregable): su propósito es dominar histogramas y ecualización, el realce que el Ejercicio 4 aplica antes de detectar bordes en `contraluz.jpg`.
 
 # %%
+GAUSS_KSIZE = (5, 5)  # Tamaño del kernel gaussiano. Debe ser impar.
+SIGMA = 0  # 0 = desviación calculada automáticamente desde el tamaño.
+
 demo_nombre = "contraluz.jpg" if "contraluz.jpg" in imagenes else next(iter(imagenes))
 demo = imagenes[demo_nombre]
-gris_demo, gris_eq_demo = preprocesar(demo)
+gris_demo, gris_eq_demo = preprocesar(demo, GAUSS_KSIZE, SIGMA)
 
 fig, axes = plt.subplots(2, 3, figsize=FIGSIZE)
 axes[0, 0].imshow(cv2.cvtColor(demo, cv2.COLOR_BGR2RGB))
@@ -330,16 +317,21 @@ plt.show()
 #
 # **Procedimiento:**
 # 1. Ejecute la celda con los valores por defecto (`SCORE_THRESHOLD = 0.6`, `NMS_THRESHOLD = 0.3`). Registre en la Tabla `[E1]` el número de caras y los puntajes de cada una de sus 3 fotos. Si el conteo supera el número de personas visibles, no es un error: son falsos positivos; regístrelos tal cual y explíquelos en `[P1]`.
-# 2. Experimento obligatorio A: cambie en la sección 2.4 `SCORE_THRESHOLD = 0.95`, vuelva a ejecutar y agregue la fila de `grupo_3personas.jpg`. Restaure 0.6.
-# 3. Experimento obligatorio B: cambie en la sección 2.4 `NMS_THRESHOLD = 0.9`, vuelva a ejecutar y agregue la fila de `grupo_3personas.jpg`. Restaure 0.3.
+# 2. Experimento obligatorio A: cambie al inicio de esta misma celda `SCORE_THRESHOLD = 0.95`, vuelva a ejecutar y agregue la fila de `grupo_3personas.jpg`. Restaure 0.6.
+# 3. Experimento obligatorio B: cambie al inicio de esta misma celda `NMS_THRESHOLD = 0.9`, vuelva a ejecutar y agregue la fila de `grupo_3personas.jpg`. Restaure 0.3.
 # 4. Responda `[P1]` debajo de la tabla.
 
 # %%
+# Parámetros de este ejercicio (edítelos aquí para los experimentos A y B).
+SCORE_THRESHOLD = 0.6  # Experimento A: comparar 0.6 frente a 0.95
+NMS_THRESHOLD = 0.3  # Experimento B: comparar 0.3 frente a 0.9
+TOP_K = 5000  # Máximo de candidatos antes de NMS.
+
 resultados = {}
 
 for nombre, bgr in imagenes.items():
     print(f"--- {nombre} ---")
-    cajas, puntos, puntajes = detectar_rostros(bgr)
+    cajas, puntos, puntajes = detectar_rostros(bgr, SCORE_THRESHOLD, NMS_THRESHOLD, TOP_K)
     print(f"  puntajes: {sorted(round(float(s), 3) for s in puntajes)}")
     resultados[nombre] = {"n": len(cajas), "rostros": cajas, "puntos": puntos}
     anotada = dibujar(bgr, cajas, puntos)
@@ -384,11 +376,18 @@ for nombre, r in resultados.items():
 #
 # **Procedimiento:**
 # 1. Ejecute la celda: toma el rostro más grande de `frontal.jpg` (o de la primera imagen con detección), segmenta piel en HSV y compara la máscara cruda frente a la limpia con `OPEN 3x3 + CLOSE 5x5`.
-# 2. Experimento obligatorio: cambie en la sección 2.4 `KERNEL_OPEN` a `(7,7)`, vuelva a ejecutar y registre ambos conteos de píxeles en la Tabla `[E2]`. Restaure `(3,3)`.
+# 2. Experimento obligatorio: cambie al inicio de esta misma celda `KERNEL_OPEN` a `(7,7)`, vuelva a ejecutar y registre ambos conteos de píxeles en la Tabla `[E2]`. Restaure `(3,3)`.
 # 3. Si YuNet no detectó ningún rostro, la celda usa un recorte central para no interrumpir el laboratorio: indíquelo en `[E2]` como fallo del detector.
 # 4. Responda `[P2]`.
 
 # %%
+# Parámetros de este ejercicio (edítelos aquí para el experimento).
+# Rango de piel en HSV: H en 0-179, S y V en 0-255.
+PIEL_LOW = np.array([0, 30, 60], dtype=np.uint8)
+PIEL_HIGH = np.array([20, 150, 255], dtype=np.uint8)
+KERNEL_OPEN = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))  # Experimento: comparar (3,3) frente a (7,7)
+KERNEL_CLOSE = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
 bgr_ref_nombre = (
     "frontal.jpg"
     if "frontal.jpg" in resultados and len(resultados["frontal.jpg"]["rostros"]) > 0
@@ -410,8 +409,8 @@ else:
     print(f"YuNet no detectó rostros. Se usa un recorte central de {bgr_ref_nombre}.")
 
 roi = bgr_ref[y : y + h, x : x + w]
-mask_cruda = segmentar_piel_hsv(roi)
-mask_limpia = limpiar_mascara(mask_cruda)
+mask_cruda = segmentar_piel_hsv(roi, PIEL_LOW, PIEL_HIGH)
+mask_limpia = limpiar_mascara(mask_cruda, KERNEL_OPEN, KERNEL_CLOSE)
 n_cruda, n_limpia = int(np.count_nonzero(mask_cruda)), int(np.count_nonzero(mask_limpia))
 print(f"Piel: cruda={n_cruda} px, limpia={n_limpia} px")
 
@@ -470,6 +469,10 @@ plt.show()
 # 4. Responda `[P3]`.
 
 # %%
+# Parámetros de este ejercicio (umbrales de histéresis de Canny).
+CANNY_T1 = 100  # Umbral bajo.
+CANNY_T2 = 200  # Umbral alto. Experimento opcional: comparar (100,200) frente a (50,150).
+
 gris_roi, gris_eq_roi = preprocesar(roi)
 
 if roi_desde_deteccion:
