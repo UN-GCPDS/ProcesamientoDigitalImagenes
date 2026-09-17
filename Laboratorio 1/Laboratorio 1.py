@@ -19,16 +19,15 @@
 # #### *Procesamiento Digital de Imágenes*
 #
 # #### Profesor: Lucas Iturriago
-# #### Monitora: Isabella Valero Mora - lvalerom@unal.edu.co
 
 # %% [markdown]
-# # 1. Laboratorio 1: Detección Facial Clásica con OpenCV
+# # 1. Laboratorio 1: Detección Facial con OpenCV
 #
 # ## 1.1. Objetivo
 #
-# Construir un pipeline completo de procesamiento clásico (sin aprendizaje profundo) sobre rostros, aplicando los contenidos de las Clases 1 a 4: representación de la imagen como arreglo de NumPy, visualización, espacios de color con OpenCV, segmentación por umbralización en HSV, morfología matemática y detección de bordes. El flujo general es:
+# Construir un pipeline completo de visión por computador sobre rostros: detección con un modelo liviano preentrenado (YuNet, incluido en OpenCV 4 y 5) y análisis clásico del rostro recortado, aplicando los contenidos de las Clases 1 a 4: representación de la imagen como arreglo de NumPy, visualización, espacios de color con OpenCV, segmentación por umbralización en HSV, morfología matemática y detección de bordes. El flujo general es:
 #
-# $$foto \rightarrow gris \rightarrow ecualizado \rightarrow Haar \rightarrow ROI \rightarrow piel\ HSV \rightarrow morfología \rightarrow ojos/sonrisa + bordes$$
+# $$foto \rightarrow YuNet \rightarrow ROI \rightarrow \begin{cases} gris \rightarrow ecualizado \rightarrow Canny \\ piel\ HSV \rightarrow morfología \end{cases} + ojos\ (landmarks)$$
 #
 # ## 1.2. Organización del trabajo
 #
@@ -38,13 +37,13 @@
 #
 # ## 1.3. Requisitos de software
 #
-# `Python 3.11`, `numpy`, `matplotlib` y `opencv-python 4.x`:
+# `Python 3.11`, `numpy`, `matplotlib` y `opencv-python` (versión 4.x o 5.x, ambas sirven):
 #
 # ```
-# pip install "opencv-python<5" numpy matplotlib
+# pip install opencv-python numpy matplotlib
 # ```
 #
-# OpenCV debe ser versión 4.x, pues el detector de Haar (`CascadeClassifier`) fue eliminado en OpenCV 5. La sección 2.1 verifica automáticamente la versión instalada. En Google Colab no necesita instalar nada: el entorno ya trae OpenCV 4.x, `numpy` y `matplotlib`.
+# El detector usado (YuNet) funciona igual en OpenCV 4 y 5. La sección 2.1 verifica la instalación. En Google Colab no necesita instalar nada. El modelo de detección (`modelo/face_detection_yunet_2023mar.onnx`, 230 KB) viene en el repositorio; en Colab se descarga solo (sección 2.2).
 #
 # ## 1.4. Imágenes de trabajo
 #
@@ -53,8 +52,8 @@
 # | Archivo | Contenido | Propósito |
 # |---|---|---|
 # | `frontal.jpg` | Usted de frente, buena iluminación, fondo claro, rostro descubierto (sin gafas de sol ni gorra) | Caso base: todo el pipeline debe funcionar aquí (se espera 1 cara) |
-# | `grupo_3personas.jpg` | Usted con dos compañeros, los tres de frente a ~2 m, fondo despejado | Caso multiobjeto: conteo y efecto de `scaleFactor` (se esperan 3 caras) |
-# | `contraluz.jpg` | Un rostro frente a una ventana o fuente de luz (cara más oscura que el fondo) | Caso difícil: efecto de la ecualización y límites de Haar |
+# | `grupo_3personas.jpg` | Usted con dos compañeros, los tres de frente a ~2 m, fondo despejado | Caso multiobjeto: conteo y efecto de los umbrales (se esperan 3 caras) |
+# | `contraluz.jpg` | Un rostro frente a una ventana o fuente de luz (cara más oscura que el fondo) | Caso difícil: efecto de la ecualización y límites del detector |
 #
 # Tome las fotos antes de la práctica (celular en JPG, lado mayor ~800 px). Si alguna imagen falta, el cuaderno lo indica en la sección 2.3 y continúa con las disponibles, pero la entrega exige resultados sobre las 3.
 #
@@ -79,7 +78,7 @@ print(f"Estudiante: {ESTUDIANTE_NOMBRE} | Grupo: {ESTUDIANTE_GRUPO} | Fecha: {FE
 # %% [markdown]
 # ## 2.1. Verificación del entorno
 #
-# Ejecute la celda. Debe imprimir las versiones y confirmar que los tres clasificadores Haar se cargaron (`True`). Si alguna verificación falla, deténgase y revise la instalación indicada en la sección 1.3 antes de continuar.
+# Ejecute la celda. Debe imprimir las versiones de OpenCV y NumPy y confirmar `Detector YuNet disponible: True` (vale tanto OpenCV 4 como 5). Si la verificación falla, deténgase y revise la instalación indicada en la sección 1.3 antes de continuar.
 
 # %%
 import time
@@ -91,22 +90,15 @@ import matplotlib.pyplot as plt
 
 print("OpenCV:", cv2.__version__)
 print("NumPy:", np.__version__)
-
-if not hasattr(cv2, "CascadeClassifier"):
-    raise SystemExit(
-        f"OpenCV {cv2.__version__} no incluye Haar (eliminado en OpenCV 5). "
-        'Instale OpenCV 4.x con: pip install "opencv-python<5" y reinicie el kernel.'
-    )
+print("Detector YuNet disponible:", hasattr(cv2, "FaceDetectorYN_create"))
 
 BASE_DIR = Path(__file__).parent if "__file__" in globals() else Path(".")
 
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
-smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
-
-print("Clasificador rostros cargado:", not face_cascade.empty())
-print("Clasificador ojos cargado:", not eye_cascade.empty())
-print("Clasificador sonrisa cargado:", not smile_cascade.empty())
+# Modelo de detección facial YuNet (liviano, ~230 KB). En local viene en el
+# repositorio; en Colab se descarga automáticamente en la sección 2.2.
+MODELO_NOMBRE = "face_detection_yunet_2023mar.onnx"
+MODELO_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+MODELO_PATH = BASE_DIR / "modelo" / MODELO_NOMBRE
 
 # Métricas del laboratorio. Cada ejercicio guarda aquí sus resultados;
 # la sección 8 las resume para la entrega y la calificación.
@@ -144,6 +136,20 @@ if EN_COLAB:
         print("No se encontró el módulo de subida. Suba las fotos con el panel de archivos de Colab a img/ y vuelva a ejecutar.")
 else:
     print("Celda solo para Google Colab. En local, copie sus fotos a img/ (ver sección 1.4).")
+
+# %%
+# Modelo de detección: en local ya viene en el repositorio; en Google Colab se
+# descarga automáticamente (una vez, ~230 KB). En local esta celda solo verifica.
+import urllib.request
+
+if not MODELO_PATH.exists():
+    if EN_COLAB:
+        print("Descargando modelo YuNet ...")
+        MODELO_PATH.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(MODELO_URL, MODELO_PATH)
+    else:
+        raise SystemExit(f"No se encuentra el modelo en {MODELO_PATH}. Verifique la carpeta del laboratorio.")
+print(f"Modelo OK: {MODELO_PATH} ({MODELO_PATH.stat().st_size // 1024} KB)")
 
 # %% [markdown]
 # ## 2.3. Verificación de las imágenes
@@ -183,22 +189,23 @@ plt.show()
 #
 # Todos los valores que se experimentan están reunidos aquí. Para los experimentos indicados basta con modificar el parámetro, volver a ejecutar la celda del ejercicio correspondiente y registrar el resultado en la tabla. No es necesario modificar las funciones de la sección 3.
 #
-# El detector de Haar evalúa ventanas a varias escalas de una pirámide. Dos parámetros controlan el compromiso entre detecciones y falsos positivos:
+# El detector YuNet asigna a cada candidato un puntaje de confianza $s$ y luego
+# fusiona cajas traslapadas con supresión de no-máximos (NMS). Dos umbrales controlan el compromiso entre detecciones y falsos positivos:
 #
-# $$ventanas = \text{escala pirámide}(scaleFactor) \times \text{votos mínimos}(minNeighbors)$$
+# $$detección = 1 \iff s \ge \tau_{score} \quad ; \quad IoU(A,B) = \frac{|A \cap B|}{|A \cup B|}, \; \text{se suprime si } IoU > \tau_{nms}$$
 #
-# * `SCALE_FACTOR` cercano a 1.0 recorre más escalas: detecta más, pero tarda más.
-# * `MIN_NEIGHBORS` alto exige más acuerdo entre ventanas vecinas: menos falsos positivos, pero pierde caras difíciles.
+# * `SCORE_THRESHOLD` alto conserva solo caras seguras: menos falsos positivos, pero puede borrar caras difíciles.
+# * `NMS_THRESHOLD` laxo (cercano a 1.0) deja sobrevivir cajas traslapadas duplicadas; estricto las fusiona (ver Clase 10: detectores NMS-Free).
 
 # %%
 # --- Preproceso ---
 GAUSS_KSIZE = (5, 5)  # Tamaño del kernel gaussiano. Debe ser impar.
 SIGMA = 0  # 0 = desviación calculada automáticamente desde el tamaño.
 
-# --- Detección Haar (Ejercicio 2: experimentar con estos dos) ---
-SCALE_FACTOR = 1.1  # Experimento: comparar 1.05 frente a 1.3
-MIN_NEIGHBORS = 5  # Experimento opcional: comparar 3 frente a 8
-MIN_SIZE = (60, 60)  # Se ignoran detecciones menores (ruido).
+# --- Detección YuNet (Ejercicio 2: experimentar con estos dos) ---
+SCORE_THRESHOLD = 0.6  # Experimento: comparar 0.6 frente a 0.95
+NMS_THRESHOLD = 0.3  # Experimento: comparar 0.3 frente a 0.9
+TOP_K = 5000  # Máximo de candidatos antes de NMS.
 
 # --- Segmentación de piel en HSV (Ejercicio 3) ---
 # Un píxel se clasifica como piel si sus tres canales están dentro del rango:
@@ -223,7 +230,7 @@ SALIDA_PNG = BASE_DIR / "resultado.png"
 # %% [markdown]
 # # 3. Funciones de Procesamiento
 #
-# Estas funciones implementan el pipeline. Léalas para asociar cada operación con su fundamento (ecualización por acumulada $s_k = (L-1)\sum p(r_j)$, suavizado gaussiano $G(x,y)$, voto de Haar, `inRange`, apertura/cierre). No requieren modificaciones.
+# Estas funciones implementan el pipeline. Léalas para asociar cada operación con su fundamento (ecualización por acumulada $s_k = (L-1)\sum p(r_j)$, suavizado gaussiano $G(x,y)$, umbral de confianza, NMS por $IoU$, `inRange`, apertura/cierre). No requieren modificaciones.
 
 # %%
 def preprocesar(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -234,18 +241,31 @@ def preprocesar(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return gris, gris_eq
 
 
-def detectar_rostros(gris: np.ndarray) -> np.ndarray:
-    """Aplica Haar sobre una imagen en gris. Devuelve arreglos (x, y, w, h)."""
-    t0 = time.time()
-    rostros = face_cascade.detectMultiScale(
-        gris,
-        scaleFactor=SCALE_FACTOR,
-        minNeighbors=MIN_NEIGHBORS,
-        minSize=MIN_SIZE,
+def crear_detector() -> cv2.FaceDetectorYN:
+    """Crea el detector YuNet con los umbrales de la sección 2.4."""
+    return cv2.FaceDetectorYN_create(
+        str(MODELO_PATH), "", (320, 320), SCORE_THRESHOLD, NMS_THRESHOLD, TOP_K
     )
+
+
+def detectar_rostros(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Detecta rostros en BGR. Devuelve (cajas Nx4 [x,y,w,h], landmarks Nx10, puntajes N).
+
+    Cada fila de landmarks trae 5 puntos: ojo, ojo, nariz, boca, boca.
+    """
+    h, w = bgr.shape[:2]
+    t0 = time.time()
+    detector = crear_detector()
+    detector.setInputSize((w, h))
+    _, caras = detector.detect(bgr)
     dt = time.time() - t0
-    print(f"  Haar: {len(rostros)} cara(s) en {dt:.2f}s (scale={SCALE_FACTOR}, neighbors={MIN_NEIGHBORS})")
-    return rostros
+    if caras is None:
+        caras = np.zeros((0, 15), dtype=np.float32)
+    cajas = caras[:, :4].astype(int)
+    puntos = caras[:, 4:14]
+    puntajes = caras[:, 14]
+    print(f"  YuNet: {len(cajas)} cara(s) en {dt:.2f}s (score>={SCORE_THRESHOLD}, nms={NMS_THRESHOLD})")
+    return cajas, puntos, puntajes
 
 
 def segmentar_piel_hsv(bgr_roi: np.ndarray) -> np.ndarray:
@@ -260,16 +280,16 @@ def limpiar_mascara(mask: np.ndarray) -> np.ndarray:
     return cv2.morphologyEx(abierta, cv2.MORPH_CLOSE, KERNEL_CLOSE)
 
 
-def dibujar(bgr: np.ndarray, rostros=(), ojos=(), sonrisas=()) -> np.ndarray:
-    """Devuelve una copia anotada: verde = rostro, azul = ojos, magenta = sonrisa."""
+def dibujar(bgr: np.ndarray, cajas=(), puntos=None) -> np.ndarray:
+    """Devuelve una copia anotada: verde = rostro, azul = ojos (landmarks de YuNet)."""
     out = bgr.copy()
-    for (x, y, w, h) in rostros:
-        cv2.rectangle(out, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(out, "cara", (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
-    for (x, y, w, h) in ojos:
-        cv2.rectangle(out, (x, y), (x + w, y + h), (255, 0, 0), 2)
-    for (x, y, w, h) in sonrisas:
-        cv2.rectangle(out, (x, y), (x + w, y + h), (255, 0, 255), 2)
+    for (x, y, w, h) in cajas:
+        cv2.rectangle(out, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 0), 2)
+        cv2.putText(out, "cara", (int(x), int(y) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+    if puntos is not None:
+        for p in puntos:
+            for k in (0, 1):  # los dos primeros landmarks son los ojos
+                cv2.circle(out, (int(p[2 * k]), int(p[2 * k + 1])), 4, (255, 0, 0), -1)
     return out
 
 
@@ -279,7 +299,7 @@ def dibujar(bgr: np.ndarray, rostros=(), ojos=(), sonrisas=()) -> np.ndarray:
 # **Procedimiento:**
 # 1. Ejecute la celda y observe las tres columnas: imagen original, gris con suavizado y gris ecualizado, con sus histogramas debajo.
 # 2. Compare el histograma del gris frente al ecualizado: la ecualización redistribuye las intensidades según la acumulada $s_k = (L-1)\sum_{j=0}^{k} p(r_j)$ con $p(r_j)=n_j/MN$.
-# 3. Este ejercicio es formativo (sin entregable): su propósito es visualizar por qué la ecualización ayuda en `contraluz.jpg` antes de detectar.
+# 3. Este ejercicio es formativo (sin entregable): su propósito es dominar histogramas y ecualización, el realce que el Ejercicio 4 aplica antes de detectar bordes en `contraluz.jpg`.
 
 # %%
 demo_nombre = "contraluz.jpg" if "contraluz.jpg" in imagenes else next(iter(imagenes))
@@ -306,12 +326,12 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# # 5. Ejercicio 2 — Detección de Rostros con Haar [20 min]
+# # 5. Ejercicio 2 — Detección de Rostros con YuNet [20 min]
 #
 # **Procedimiento:**
-# 1. Ejecute la celda con los valores por defecto (`SCALE_FACTOR = 1.1`). Registre en la Tabla `[E1]` el número de caras sobre gris y sobre gris ecualizado para cada una de las 3 imágenes. Si el conteo supera el número de personas visibles, no es un error: son falsos positivos; regístrelos tal cual y explíquelos en `[P1]`.
-# 2. Experimento obligatorio: cambie en la sección 2.4 `SCALE_FACTOR = 1.3`, vuelva a ejecutar la celda y agregue la fila correspondiente a `grupo_3personas.jpg`. Restaure después el valor 1.1.
-# 3. Experimento opcional: compare `MIN_NEIGHBORS = 3` frente a `8` en `contraluz.jpg`.
+# 1. Ejecute la celda con los valores por defecto (`SCORE_THRESHOLD = 0.6`, `NMS_THRESHOLD = 0.3`). Registre en la Tabla `[E1]` el número de caras y los puntajes de cada una de sus 3 fotos. Si el conteo supera el número de personas visibles, no es un error: son falsos positivos; regístrelos tal cual y explíquelos en `[P1]`.
+# 2. Experimento obligatorio A: cambie en la sección 2.4 `SCORE_THRESHOLD = 0.95`, vuelva a ejecutar y agregue la fila de `grupo_3personas.jpg`. Restaure 0.6.
+# 3. Experimento obligatorio B: cambie en la sección 2.4 `NMS_THRESHOLD = 0.9`, vuelva a ejecutar y agregue la fila de `grupo_3personas.jpg`. Restaure 0.3.
 # 4. Responda `[P1]` debajo de la tabla.
 
 # %%
@@ -319,44 +339,43 @@ resultados = {}
 
 for nombre, bgr in imagenes.items():
     print(f"--- {nombre} ---")
-    gris, gris_eq = preprocesar(bgr)
-    rostros_gris = detectar_rostros(gris)
-    rostros_eq = detectar_rostros(gris_eq)
-    print(f"  gris={len(rostros_gris)} frente a ecualizado={len(rostros_eq)} (conserve el ecualizado)")
-    resultados[nombre] = {"gris": len(rostros_gris), "eq": len(rostros_eq), "rostros": rostros_eq}
-    anotada = dibujar(bgr, rostros_eq)
+    cajas, puntos, puntajes = detectar_rostros(bgr)
+    print(f"  puntajes: {sorted(round(float(s), 3) for s in puntajes)}")
+    resultados[nombre] = {"n": len(cajas), "rostros": cajas, "puntos": puntos}
+    anotada = dibujar(bgr, cajas, puntos)
     plt.figure(figsize=(6, 5))
     plt.imshow(cv2.cvtColor(anotada, cv2.COLOR_BGR2RGB))
-    plt.title(f"{nombre}: {len(rostros_eq)} cara(s) [scale={SCALE_FACTOR}]")
+    plt.title(f"{nombre}: {len(cajas)} cara(s) [score>={SCORE_THRESHOLD}, nms={NMS_THRESHOLD}]")
     plt.axis("off")
     plt.show()
 
-METRICAS["deteccion"] = {k: {"gris": v["gris"], "ecualizado": v["eq"]} for k, v in resultados.items()}
-METRICAS["scale_factor"] = SCALE_FACTOR
-METRICAS["min_neighbors"] = MIN_NEIGHBORS
+METRICAS["deteccion"] = {k: v["n"] for k, v in resultados.items()}
+METRICAS["score_threshold"] = SCORE_THRESHOLD
+METRICAS["nms_threshold"] = NMS_THRESHOLD
 
-print("gris | ecualizado (para transcribir a [E1])")
+print("#caras (para transcribir a [E1])")
 for nombre, r in resultados.items():
-    print(f"{nombre} | {r['gris']} | {r['eq']}")
+    print(f"{nombre} | {r['n']}")
 
 # %% [markdown]
 # ## Tabla [E1] — Resultados de detección (calificable)
 #
-# Transcriba aquí los conteos impresos por la celda anterior. La fila de `grupo_3personas.jpg` con `scale=1.3` corresponde al experimento obligatorio del paso 2.
+# Transcriba aquí los conteos y puntajes impresos por la celda anterior. Las dos filas de `grupo_3personas.jpg` con `score=0.95` y `nms=0.9` corresponden a los experimentos obligatorios A y B.
 #
-# | imagen | gris #caras | ecualizado #caras | scale | tiempo aprox. | observación (1 línea) |
+# | imagen | #caras | puntajes | score_thr | nms_thr | observación (1 línea) |
 # |---|---|---|---|---|---|
-# | frontal.jpg |  |  | 1.1 |  |  |
-# | grupo_3personas.jpg |  |  | 1.1 |  |  |
-# | grupo_3personas.jpg |  |  | 1.3 |  |  |
-# | contraluz.jpg |  |  | 1.1 |  |  |
+# | frontal.jpg |  |  | 0.6 | 0.3 |  |
+# | grupo_3personas.jpg |  |  | 0.6 | 0.3 |  |
+# | grupo_3personas.jpg |  |  | 0.95 | 0.3 |  |
+# | grupo_3personas.jpg |  |  | 0.6 | 0.9 |  |
+# | contraluz.jpg |  |  | 0.6 | 0.3 |  |
 #
 # *(Diligencie todas las celdas de la tabla. Sin esta tabla la entrega está incompleta.)*
 
 # %% [markdown]
-# ## Pregunta [P1] — Efecto de `scaleFactor` (calificable)
+# ## Pregunta [P1] — Umbrales de confianza y NMS (calificable)
 #
-# Con los datos de la Tabla [E1]: ¿qué configuración detectó más caras en el grupo y cuál fue más rápida? Explique con la pirámide de escalas por qué un `scaleFactor` pequeño tarda más.
+# Con los datos de la Tabla [E1]: ¿qué ocurrió al subir `score` a 0.95 (desaparecieron caras reales, falsos positivos, o nada)? ¿Y al relajar `nms` a 0.9 (aparecieron cajas duplicadas traslapadas)? Explique el mecanismo de cada umbral y su relación con los detectores modernos (Clase 10: NMS y detectores NMS-Free).
 #
 # *(Escriba su respuesta aquí. Mínimo 4 líneas con argumento técnico. No deje el marcador.)*
 
@@ -366,7 +385,7 @@ for nombre, r in resultados.items():
 # **Procedimiento:**
 # 1. Ejecute la celda: toma el rostro más grande de `frontal.jpg` (o de la primera imagen con detección), segmenta piel en HSV y compara la máscara cruda frente a la limpia con `OPEN 3x3 + CLOSE 5x5`.
 # 2. Experimento obligatorio: cambie en la sección 2.4 `KERNEL_OPEN` a `(7,7)`, vuelva a ejecutar y registre ambos conteos de píxeles en la Tabla `[E2]`. Restaure `(3,3)`.
-# 3. Si Haar no detectó ningún rostro, la celda usa un recorte central para no interrumpir el laboratorio: indíquelo en `[E2]` como fallo de Haar.
+# 3. Si YuNet no detectó ningún rostro, la celda usa un recorte central para no interrumpir el laboratorio: indíquelo en `[E2]` como fallo del detector.
 # 4. Responda `[P2]`.
 
 # %%
@@ -388,7 +407,7 @@ else:
     bgr_ref = imagenes[bgr_ref_nombre]
     H, W = bgr_ref.shape[:2]
     x, y, w, h = W // 4, H // 4, W // 2, H // 2
-    print(f"Haar no detectó rostros. Se usa un recorte central de {bgr_ref_nombre}.")
+    print(f"YuNet no detectó rostros. Se usa un recorte central de {bgr_ref_nombre}.")
 
 roi = bgr_ref[y : y + h, x : x + w]
 mask_cruda = segmentar_piel_hsv(roi)
@@ -438,7 +457,7 @@ plt.show()
 # # 7. Ejercicio 4 — Rasgos, Bordes y Figura Final [15 min]
 #
 # **Procedimiento:**
-# 1. Ejecute la primera celda: detecta ojos y sonrisa únicamente dentro del ROI del rostro (por eso es rápido en local) y compara el detector de bordes de Canny frente al gradiente morfológico.
+# 1. Ejecute la primera celda: toma los ojos del rostro (landmarks que entrega YuNet, sin costo adicional) y compara el detector de bordes de Canny —aplicado sobre el gris ecualizado del Ejercicio 1— frente al gradiente morfológico.
 # 2. El detector de Canny es multietapa (suavizado gaussiano → gradientes de Sobel → supresión de no-máximos → histéresis con `CANNY_T1/T2`):
 #
 # $$M = \sqrt{G_x^2+G_y^2}, \quad fuerte = M>T_2, \; débil = T_1<M\le T_2$$
@@ -451,25 +470,33 @@ plt.show()
 # 4. Responda `[P3]`.
 
 # %%
-gris_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-ojos = eye_cascade.detectMultiScale(gris_roi, scaleFactor=1.1, minNeighbors=8, minSize=(20, 20))
-sonrisas = smile_cascade.detectMultiScale(gris_roi, scaleFactor=1.3, minNeighbors=25, minSize=(30, 30))
-print(f"Ojos: {len(ojos)}, sonrisas: {len(sonrisas)} (puede fallar con gafas o perfil: regístrelo en [P3])")
+gris_roi, gris_eq_roi = preprocesar(roi)
 
-canny = cv2.Canny(gris_roi, CANNY_T1, CANNY_T2)
+if roi_desde_deteccion:
+    cajas_img = resultados[bgr_ref_nombre]["rostros"]
+    puntos_img = resultados[bgr_ref_nombre]["puntos"]
+    idx = int(np.argmax([w * h for (x, y, w, h) in cajas_img]))
+    puntos_roi = puntos_img[idx].reshape(1, -1)
+    n_ojos = 2
+else:
+    puntos_roi = np.zeros((0, 10), dtype=np.float32)
+    n_ojos = 0
+print(f"Ojos (landmarks YuNet): {n_ojos} (si el ROI es un recorte central no hay landmarks: regístrelo en [P3])")
+
+canny = cv2.Canny(gris_eq_roi, CANNY_T1, CANNY_T2)
 kernel_g = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 grad_morf = cv2.morphologyEx(gris_roi, cv2.MORPH_GRADIENT, kernel_g)
-anotada_roi = dibujar(roi, [], ojos, sonrisas)
+anotada_roi = dibujar(roi, [], puntos_roi)
 
-METRICAS["rasgos"] = {"ojos": len(ojos), "sonrisas": len(sonrisas)}
+METRICAS["rasgos"] = {"ojos": n_ojos}
 METRICAS["canny"] = [CANNY_T1, CANNY_T2]
 
 fig, axes = plt.subplots(1, 3, figsize=FIGSIZE)
 axes[0].imshow(cv2.cvtColor(anotada_roi, cv2.COLOR_BGR2RGB))
-axes[0].set_title(f"Ojos {len(ojos)} / sonrisas {len(sonrisas)}")
+axes[0].set_title(f"Ojos detectados: {n_ojos}")
 axes[0].axis("off")
 axes[1].imshow(canny, cmap="gray")
-axes[1].set_title(f"Canny ({CANNY_T1},{CANNY_T2})")
+axes[1].set_title(f"Canny ecualizado ({CANNY_T1},{CANNY_T2})")
 axes[1].axis("off")
 axes[2].imshow(grad_morf, cmap="gray")
 axes[2].set_title("Gradiente morfológico")
@@ -478,10 +505,14 @@ plt.tight_layout()
 plt.show()
 
 # %%
-gris_full = cv2.cvtColor(bgr_ref, cv2.COLOR_BGR2GRAY)
-canny_full = cv2.Canny(gris_full, CANNY_T1, CANNY_T2)
+gris_full, gris_eq_full = preprocesar(bgr_ref)
+canny_full = cv2.Canny(gris_eq_full, CANNY_T1, CANNY_T2)
 n_caras_panel = len(resultados[bgr_ref_nombre]["rostros"]) if bgr_ref_nombre in resultados else 0
-anotada_full = dibujar(bgr_ref, resultados[bgr_ref_nombre]["rostros"] if bgr_ref_nombre in resultados else [])
+anotada_full = dibujar(
+    bgr_ref,
+    resultados[bgr_ref_nombre]["rostros"] if bgr_ref_nombre in resultados else [],
+    resultados[bgr_ref_nombre]["puntos"] if bgr_ref_nombre in resultados else None,
+)
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 axes[0, 0].imshow(cv2.cvtColor(bgr_ref, cv2.COLOR_BGR2RGB))
@@ -491,13 +522,13 @@ axes[0, 1].imshow(gris_full, cmap="gray", vmin=0, vmax=255)
 axes[0, 1].set_title("2. Gris")
 axes[0, 1].axis("off")
 axes[0, 2].imshow(cv2.cvtColor(anotada_full, cv2.COLOR_BGR2RGB))
-axes[0, 2].set_title(f"3. Haar: {n_caras_panel} cara(s)")
+axes[0, 2].set_title(f"3. YuNet: {n_caras_panel} cara(s)")
 axes[0, 2].axis("off")
 axes[1, 0].imshow(mask_limpia, cmap="gray", vmin=0, vmax=255)
 axes[1, 0].set_title("4. Piel HSV limpia")
 axes[1, 0].axis("off")
 axes[1, 1].imshow(cv2.cvtColor(anotada_roi, cv2.COLOR_BGR2RGB))
-axes[1, 1].set_title("5. Ojos y sonrisa")
+axes[1, 1].set_title("5. Ojos (landmarks)")
 axes[1, 1].axis("off")
 axes[1, 2].imshow(canny_full, cmap="gray")
 axes[1, 2].set_title("6. Canny")
@@ -508,9 +539,9 @@ print(f"Figura [FIG] guardada en: {SALIDA_PNG}")
 plt.show()
 
 # %% [markdown]
-# ## Pregunta [P3] — Límites del enfoque clásico (calificable)
+# ## Pregunta [P3] — Límites del detector y del análisis por color (calificable)
 #
-# ¿En qué imagen o condición falló Haar (perfil, contraluz, oclusión, grupo)? ¿Por qué el espacio HSV separa la piel mejor que BGR? Con lo observado, ¿por qué un detector aprendido (Unidad 2) superaría a este pipeline?
+# ¿En qué foto o condición el detector dudó o falló (contraluz, oclusión, perfil, fondo con textura)? ¿Por qué el espacio HSV separa la piel mejor que BGR? Con lo observado en el pipeline (detección + segmentación clásica), ¿qué problema seguiría sin resolver un detector mayor como YOLO (Unidad 2)?
 #
 # *(Escriba su respuesta aquí. Mínimo 4 líneas con argumento técnico. No deje el marcador.)*
 
@@ -527,11 +558,11 @@ plt.show()
 # | ID | Contenido | Peso |
 # |---|---|---|
 # | Datos | `ESTUDIANTE_NOMBRE` y `GRUPO` diligenciados (sección 1.5) | 5% |
-# | `[E1]` | Tabla de detección completa: sus 3 fotos + fila `scale=1.3` en el grupo | 25% |
-# | `[P1]` | Efecto de `scaleFactor`, explicado con la pirámide de escalas | 15% |
+# | `[E1]` | Tabla de detección completa: sus 3 fotos + filas `score=0.95` y `nms=0.9` en el grupo | 25% |
+# | `[P1]` | Efecto de los umbrales de confianza y NMS | 15% |
 # | `[E2]` | Tabla de piel con ambos kernels | 15% |
 # | `[P2]` | Apertura frente a cierre + efecto del kernel (7,7) | 15% |
-# | `[P3]` | Fallos de Haar + HSV frente a BGR + puente a detectores aprendidos | 15% |
+# | `[P3]` | Límites del detector + HSV frente a BGR + puente a detectores mayores | 15% |
 # | `[FIG]` | `resultado.png` generado y cuaderno ejecutado sin errores | 10% |
 #
 # Los conteos de `[E1]` deben coincidir con las salidas impresas por el cuaderno (cada estudiante tiene fotos distintas: se califica la coherencia, no un número fijo). Las respuestas `[P1]`–`[P3]` exigen argumento técnico; un marcador sin reemplazar vale cero.
