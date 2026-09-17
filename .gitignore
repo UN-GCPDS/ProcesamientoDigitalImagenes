@@ -212,3 +212,9 @@ Pagina/mockup/
 # Presentaciones: el workflow las copia de Clase N/ al desplegar
 Pagina/assets/presentaciones/
 Clases raw/
+
+# Laboratorio 1: fotos de prueba / de estudiantes (no se versionan; cada entrega usa fotos propias)
+Laboratorio 1/img/*.jpg
+Laboratorio 1/img/*.jpeg
+Laboratorio 1/img/*.png
+Laboratorio 1/resultado.png
