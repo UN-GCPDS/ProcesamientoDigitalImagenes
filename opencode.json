@@ -1,0 +1,18 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "google-classroom": {
+        "type": "local",
+        "command": [
+          "node",
+          "C:/Users/Lucas/Documents/google-classroom-mcp/dist/index.js"
+        ],
+        "environment": {
+          "GOOGLE_CREDENTIALS_PATH": "C:/Users/Lucas/Documents/google-classroom-mcp/credentials.json",
+          "GOOGLE_TOKEN_PATH": "C:/Users/Lucas/Documents/google-classroom-mcp/token.json"
+        }
+      }
+    }
+  }
+}
