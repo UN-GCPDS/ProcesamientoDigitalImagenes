@@ -19,7 +19,6 @@
 # #### *Procesamiento Digital de Imágenes*
 #
 # #### Profesor: Lucas Iturriago
-# #### Monitora: Isabella Valero Mora - lvalerom@unal.edu.co
 
 # %% [markdown]
 # # 1. Exportación a Float32 con el Ecosistema de ExecuTorch
