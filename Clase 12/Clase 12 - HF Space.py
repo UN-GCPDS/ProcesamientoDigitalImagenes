@@ -552,38 +552,68 @@ print(f"Visita tu aplicación en vivo: https://huggingface.co/spaces/{repo_id}")
 #
 # Una vez que Hugging Face termine de instalar las dependencias y construir el Space (usualmente toma entre 2 y 3 minutos en el primer despliegue), podemos consumir sus endpoints como una API desde Python usando `gradio_client`.
 #
-# ## 5.1. Consumo con `gradio_client`
+# ## 5.1. Consumo con `gradio_client` usando las imágenes de prueba
+#
+# El directorio [`Figuras/`](Figuras/) incluye una imagen recomendada por tarea (`clasificacion_dog.jpg`, `segmentacion_deeplab1.png` y `deteccion_bus.jpg`). Si ejecutas el cuaderno en Colab sin clonar el repositorio, la celda las descarga automáticamente.
 
 # %%
+import urllib.request
 from gradio_client import Client
+
 try:
     from gradio_client import handle_file
 except ImportError:
     handle_file = None
 
-sample_img_path = "ruta/a/tu/imagen.jpg"  # <-- REEMPLAZA CON LA RUTA DE UNA IMAGEN LOCAL
+SAMPLE_IMAGES = {
+    "clasificacion": (
+        Path("Figuras/clasificacion_dog.jpg"),
+        "https://github.com/pytorch/hub/raw/master/images/dog.jpg",
+    ),
+    "segmentacion": (
+        Path("Figuras/segmentacion_deeplab1.png"),
+        "https://github.com/pytorch/hub/raw/master/images/deeplab1.png",
+    ),
+    "deteccion": (
+        Path("Figuras/deteccion_bus.jpg"),
+        "https://ultralytics.com/images/bus.jpg",
+    ),
+}
 
-if Path(sample_img_path).exists():
-    try:
-        # Conectar con el cliente de Gradio
-        client = Client(f"{HF_USER}/{SPACE_NAME}")
 
-        # Preparar payload compatible con versiones recientes de gradio_client
-        img_payload = handle_file(sample_img_path) if handle_file is not None else sample_img_path
+def obtener_imagen_prueba(task_key: str) -> Path:
+    local_path, url = SAMPLE_IMAGES[task_key]
+    if not local_path.exists():
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            local_path.write_bytes(resp.read())
+    return local_path
 
-        # 1. Endpoint de clasificación
-        result_cls = client.predict(img_payload, api_name="/predict_classification")
-        print("[+] Clasificación de la imagen:", result_cls)
 
-        # 2. Endpoint de segmentación semántica
-        result_seg = client.predict(img_payload, api_name="/predict_segmentation")
-        print("[+] Mapa de segmentación guardado en:", result_seg)
+def preparar_payload(img_path: Path):
+    path_str = str(img_path)
+    return handle_file(path_str) if handle_file is not None else path_str
 
-        # 3. Endpoint de detección de objetos
-        result_det = client.predict(img_payload, api_name="/predict_detection")
-        print("[+] Imagen con detecciones guardada en:", result_det)
-    except Exception as e:
-        print(f"[!] Detalle: {e}")
-        print(f"Puedes verificar el log de ejecución de tu Space en: https://huggingface.co/spaces/{HF_USER}/{SPACE_NAME}")
-else:
-    print(f"[!] No se encontró la imagen de prueba '{sample_img_path}'. Actualiza la ruta para probar el cliente.")
+
+try:
+    # Conectar con el cliente de Gradio
+    client = Client(f"{HF_USER}/{SPACE_NAME}")
+
+    # 1. Endpoint de clasificación
+    img_cls = obtener_imagen_prueba("clasificacion")
+    result_cls = client.predict(preparar_payload(img_cls), api_name="/predict_classification")
+    print("[+] Clasificación de la imagen:", result_cls)
+
+    # 2. Endpoint de segmentación semántica
+    img_seg = obtener_imagen_prueba("segmentacion")
+    result_seg = client.predict(preparar_payload(img_seg), api_name="/predict_segmentation")
+    print("[+] Mapa de segmentación guardado en:", result_seg)
+
+    # 3. Endpoint de detección de objetos
+    img_det = obtener_imagen_prueba("deteccion")
+    result_det = client.predict(preparar_payload(img_det), api_name="/predict_detection")
+    print("[+] Imagen con detecciones guardada en:", result_det)
+except Exception as e:
+    print(f"[!] Detalle: {e}")
+    print(f"Puedes verificar el log de ejecución de tu Space en: https://huggingface.co/spaces/{HF_USER}/{SPACE_NAME}")
