@@ -37,9 +37,7 @@
 # 4.  **Serialización (.pte):** Se guarda el grafo resultante como un archivo Flatbuffer con extensión `.pte` listo para su ejecución.
 
 # %%
-# !pip install executorch -q
-# !pip install torch==2.11.0 -q
-# !pip install ultralytics -q
+!pip install executorch ultralytics -q
 import torch
 import torchvision.models as models
 from torch.export import export
@@ -70,7 +68,7 @@ DETECTION_INPUT_SIZE = (1, 3, 640, 640)
 print("--- [1] EXPORTANDO CLASIFICACIÓN (MobileNetV2 FP32) ---")
 
 # 1. Cargar el modelo preentrenado en modo evaluación
-model_cls = models.mobilenet_v2(pretrained=True).eval()
+model_cls = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT).eval()
 
 # 2. Crear una entrada de prueba en Float32
 sample_input_cls = (torch.randn(CLASSIFICATION_INPUT_SIZE),)
@@ -114,7 +112,9 @@ class SegmentationWrapper(torch.nn.Module):
         return outputs["out"]
 
 # 2. Cargar el modelo de segmentación preentrenado (DeepLabV3 con backbone MobileNetV3)
-raw_segmentation_model = models.segmentation.deeplabv3_mobilenet_v3_large(pretrained=True).eval()
+raw_segmentation_model = models.segmentation.deeplabv3_mobilenet_v3_large(
+    weights=models.segmentation.DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT
+).eval()
 
 # 3. Instanciar wrapper en Float32
 model_seg = SegmentationWrapper(raw_segmentation_model)
